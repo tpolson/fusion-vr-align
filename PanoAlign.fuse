@@ -344,6 +344,9 @@ function Process(req)
 
         -- Apply correction - negate angles to correct the tilt (not increase it)
         result = ApplyPanoCorrection(img, -finalPitch, -finalYaw, -finalRoll, req)
+
+        -- Reset the Applied flag so it doesn't stay on
+        InApplied:SetSource(Number(0), req.Time)
     end
 
     -- Add overlay if requested (shows on current result)
