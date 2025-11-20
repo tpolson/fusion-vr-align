@@ -330,15 +330,19 @@ function Process(req)
 
     local result = img
 
+    -- Variables to hold the angles to use for transformation
+    local calcPitch, calcYaw, calcRoll
+
     -- If Apply button was just clicked, calculate and store angles
     if applied then
         -- Calculate values from reference lines
-        local calcPitch, calcYaw, calcRoll = CalculateAlignmentFromVerticals(
+        calcPitch, calcYaw, calcRoll = CalculateAlignmentFromVerticals(
             v1x1, v1y1, v1x2, v1y2,
             v2x1, v2y1, v2x2, v2y2
         )
 
-        -- Store the calculated angles
+        -- Store the calculated angles for future frames
+        -- Note: SetSource is asynchronous and won't take effect until next frame
         InStoredPitch:SetSource(Number(calcPitch), req.Time)
         InStoredYaw:SetSource(Number(calcYaw), req.Time)
         InStoredRoll:SetSource(Number(calcRoll), req.Time)
@@ -354,28 +358,29 @@ function Process(req)
 
         -- Reset the Applied flag
         InApplied:SetSource(Number(0), req.Time)
+    else
+        -- Not currently applying, so use stored angles from previous Apply
+        calcPitch = InStoredPitch:GetValue(req).Value
+        calcYaw = InStoredYaw:GetValue(req).Value
+        calcRoll = InStoredRoll:GetValue(req).Value
     end
 
-    -- Get stored angles and manual offsets
-    local storedPitch = InStoredPitch:GetValue(req).Value
-    local storedYaw = InStoredYaw:GetValue(req).Value
-    local storedRoll = InStoredRoll:GetValue(req).Value
-
+    -- Get manual offsets
     local pitchOffset = InPitchOffset:GetValue(req).Value
     local yawOffset = InYawOffset:GetValue(req).Value
     local rollOffset = InRollOffset:GetValue(req).Value
 
-    -- Calculate final values (stored + offsets)
-    local finalPitch = storedPitch + pitchOffset
-    local finalYaw = storedYaw + yawOffset
-    local finalRoll = storedRoll + rollOffset
+    -- Calculate final values (calculated/stored + offsets)
+    local finalPitch = calcPitch + pitchOffset
+    local finalYaw = calcYaw + yawOffset
+    local finalRoll = calcRoll + rollOffset
 
     -- Update final values label (order: Yaw, Pitch, Roll)
     local finalLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", finalYaw, finalPitch, finalRoll)
     InFinalInfoLabel:SetAttrs({LINKS_Name = finalLabelText})
 
-    -- Apply transformation if we have stored angles
-    if storedPitch ~= 0 or storedYaw ~= 0 or storedRoll ~= 0 or pitchOffset ~= 0 or yawOffset ~= 0 or rollOffset ~= 0 then
+    -- Apply transformation if we have any non-zero angles
+    if calcPitch ~= 0 or calcYaw ~= 0 or calcRoll ~= 0 or pitchOffset ~= 0 or yawOffset ~= 0 or rollOffset ~= 0 then
         result = ApplyPanoCorrection(img, -finalPitch, -finalYaw, -finalRoll, req)
     end
 

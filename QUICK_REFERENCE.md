@@ -6,7 +6,7 @@
 1. Load panorama in Fusion
 2. Add **Transform > Pano Align** node
 3. **Drag on-screen crosshairs** to place vertical reference lines
-4. ✅ Auto Calculate + Apply Correction (enabled by default)
+4. Click **"Apply"** button to calculate and apply alignment
 
 ### Script Method (Fast, Manual)
 1. Select your Loader node
@@ -61,15 +61,18 @@
 
 | Control | Range | Description |
 |---------|-------|-------------|
-| **Pitch** | -90° to +90° | Up/down tilt (manual mode) |
-| **Yaw** | -180° to +180° | Left/right rotation (manual mode) |
-| **Roll** | -180° to +180° | Clockwise/CCW tilt (manual mode) |
+| **Pitch Offset** | -45° to +45° | Additional up/down tilt (additive to calculated) |
+| **Yaw Offset** | -90° to +90° | Additional left/right rotation (additive to calculated) |
+| **Roll Offset** | -45° to +45° | Additional clockwise/CCW tilt (additive to calculated) |
+
+### Buttons
+
+- **Apply**: Calculate alignment from reference lines and apply transformation
+- **Reset Offsets**: Clear all manual offset adjustments to zero
 
 ### Options
 
 - ✅ **Show Reference Lines**: Display overlay (default: ON)
-- ✅ **Auto Calculate**: Calculate from reference lines (default: ON)
-- ✅ **Apply Correction**: Apply the transformation (default: ON)
 
 ---
 
@@ -145,7 +148,7 @@ Range: -180° to +180°
 ### For Preview
 1. Use **Fuse** with visual overlay
 2. Work at half resolution
-3. Disable "Apply Correction" while adjusting
+3. Adjust reference lines before clicking "Apply"
 
 ### For Final Render
 1. Note angles from Fuse
