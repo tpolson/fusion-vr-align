@@ -10,12 +10,12 @@ Usage:
 1. Connect your 360 latlong image
 2. Drag the on-screen points to define two vertical lines
    (choose features that should be vertical in real world)
-3. Click "Apply Correction" button to calculate and apply alignment
+3. Enable "Apply Correction" checkbox to see aligned result
 4. Use Manual Offsets to fine-tune (additive to calculated values)
-5. Use Reset Offsets button to clear manual adjustments
+5. Click Reset Offsets button to clear manual adjustments
 
 Author: Created for panoramic image alignment
-Version: 3.1
+Version: 3.2
 ]]--
 
 FuRegisterClass("PanoAlign", CT_Tool, {
@@ -124,13 +124,6 @@ function Create()
         ICD_Width = 1,
     })
 
-    InApplyButton = self:AddInput("Apply Correction", "ApplyButton", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "ButtonControl",
-        INP_DoNotifyChanged = true,
-        INP_External = false,
-    })
-
     InResetButton = self:AddInput("Reset Offsets", "ResetButton", {
         LINKID_DataType = "Number",
         INPID_InputControl = "ButtonControl",
@@ -140,20 +133,18 @@ function Create()
 
     self:EndControlNest()
 
-    -- Internal state to track if correction is applied
-    InCorrectionApplied = self:AddInput("Correction Applied", "CorrectionApplied", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "CheckboxControl",
-        INP_Default = 0.0,
-        INP_Integer = true,
-        IC_Visible = false,  -- Hidden from UI
-    })
-
     -- Processing options
     InShowOverlay = self:AddInput("Show Reference Lines", "ShowOverlay", {
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
         INP_Default = 1.0,
+        INP_Integer = true,
+    })
+
+    InApplyCorrection = self:AddInput("Apply Correction", "ApplyCorrection", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default = 0.0,
         INP_Integer = true,
     })
 
@@ -181,13 +172,9 @@ function Create()
 end
 
 function NotifyChanged(inp, param, time)
-    local t = time or self.Comp.CurrentTime
-
-    if inp == InApplyButton then
-        -- Enable correction
-        InCorrectionApplied[t] = 1
-    elseif inp == InResetButton then
+    if inp == InResetButton then
         -- Reset all offsets to zero
+        local t = time or self.Comp.CurrentTime
         InPitchOffset[t] = 0
         InYawOffset[t] = 0
         InRollOffset[t] = 0
@@ -293,7 +280,7 @@ end
 function Process(req)
     local img = InImage:GetValue(req)
     local showOverlay = InShowOverlay:GetValue(req).Value == 1
-    local correctionApplied = InCorrectionApplied:GetValue(req).Value == 1
+    local applyCorrection = InApplyCorrection:GetValue(req).Value == 1
 
     if not img then
         return
@@ -342,12 +329,12 @@ function Process(req)
 
     local result = img
 
-    -- Only apply correction if button has been clicked
-    if correctionApplied then
+    -- Only apply correction if checkbox is enabled
+    if applyCorrection then
         result = ApplyPanoCorrection(img, finalPitch, finalYaw, finalRoll, req)
     end
 
-    -- Add overlay if requested (always show on uncorrected image for placement)
+    -- Add overlay if requested (shows on current result)
     if showOverlay then
         result = AddOverlay(result, v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x2, v2y2, req)
     end
