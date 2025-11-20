@@ -1,0 +1,481 @@
+--[[
+Pano Align Fuse for Blackmagic Fusion
+Aligns 360 degree equirectangular/latlong panoramic images
+
+This tool allows you to define horizontal and vertical reference lines
+in your panorama and automatically calculates the pitch, yaw, and roll
+needed to align the image properly.
+
+Usage:
+1. Connect your 360 latlong image
+2. Define horizontal reference (should be level in real world)
+3. Define vertical reference (should be vertical in real world)
+4. The tool calculates and applies the correction
+
+Author: Created for panoramic image alignment
+Version: 1.0
+]]--
+
+FuRegisterClass("PanoAlign", CT_Tool, {
+    REGS_Name = "Pano Align",
+    REGS_Category = "Transform",
+    REGS_OpIconString = "PA",
+    REGS_OpDescription = "Align 360 degree panoramic images by defining horizontal and vertical references",
+    REG_Fuse_NoEdit = false,
+    REG_Fuse_NoReload = false,
+})
+
+function Create()
+    -- Input image
+    InImage = self:AddInput("Input", "Input", {
+        LINKID_DataType = "Image",
+        LINK_Main = 1,
+    })
+
+    -- Alignment Mode
+    InAlignmentMode = self:AddInput("Alignment Mode", "AlignmentMode", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "MultiButtonControl",
+        INP_Default = 0.0,
+        INP_Integer = true,
+        INP_DoNotifyChanged = true,
+        { MBTNC_AddButton = "Manual", MBTNCD_ButtonWidth = 0.33 },
+        { MBTNC_AddButton = "Two Point", MBTNCD_ButtonWidth = 0.33 },
+        { MBTNC_AddButton = "Preview", MBTNCD_ButtonWidth = 0.34 },
+    })
+
+    -- Separator
+    self:BeginControlNest("Horizontal Reference Line", "HorizRef", true, {})
+
+    InHorizX1 = self:AddInput("Point 1 X", "HorizX1", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.25,
+        INP_MinScale = 0.0,
+        INP_MaxScale = 1.0,
+    })
+
+    InHorizY1 = self:AddInput("Point 1 Y", "HorizY1", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.5,
+        INP_MinScale = 0.0,
+        INP_MaxScale = 1.0,
+    })
+
+    InHorizX2 = self:AddInput("Point 2 X", "HorizX2", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.75,
+        INP_MinScale = 0.0,
+        INP_MaxScale = 1.0,
+    })
+
+    InHorizY2 = self:AddInput("Point 2 Y", "HorizY2", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.5,
+        INP_MinScale = 0.0,
+        INP_MaxScale = 1.0,
+    })
+
+    self:EndControlNest()
+
+    -- Vertical Reference Line
+    self:BeginControlNest("Vertical Reference Line", "VertRef", true, {})
+
+    InVertX1 = self:AddInput("Point 1 X", "VertX1", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.5,
+        INP_MinScale = 0.0,
+        INP_MaxScale = 1.0,
+    })
+
+    InVertY1 = self:AddInput("Point 1 Y", "VertY1", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.25,
+        INP_MinScale = 0.0,
+        INP_MaxScale = 1.0,
+    })
+
+    InVertX2 = self:AddInput("Point 2 X", "VertX2", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.5,
+        INP_MinScale = 0.0,
+        INP_MaxScale = 1.0,
+    })
+
+    InVertY2 = self:AddInput("Point 2 Y", "VertY2", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.75,
+        INP_MinScale = 0.0,
+        INP_MaxScale = 1.0,
+    })
+
+    self:EndControlNest()
+
+    -- Manual adjustment controls
+    self:BeginControlNest("Manual Adjustments", "ManualAdjust", true, {})
+
+    InPitch = self:AddInput("Pitch", "Pitch", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinScale = -90.0,
+        INP_MaxScale = 90.0,
+        IC_Unit = "degrees",
+    })
+
+    InYaw = self:AddInput("Yaw", "Yaw", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinScale = -180.0,
+        INP_MaxScale = 180.0,
+        IC_Unit = "degrees",
+    })
+
+    InRoll = self:AddInput("Roll", "Roll", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinScale = -180.0,
+        INP_MaxScale = 180.0,
+        IC_Unit = "degrees",
+    })
+
+    self:EndControlNest()
+
+    -- Processing options
+    InShowOverlay = self:AddInput("Show Reference Lines", "ShowOverlay", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default = 1.0,
+        INP_Integer = true,
+    })
+
+    InAutoCalculate = self:AddInput("Auto Calculate", "AutoCalculate", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default = 1.0,
+        INP_Integer = true,
+    })
+
+    InApplyCorrection = self:AddInput("Apply Correction", "ApplyCorrection", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "CheckboxControl",
+        INP_Default = 1.0,
+        INP_Integer = true,
+    })
+
+    -- Output
+    OutImage = self:AddOutput("Output", "Output", {
+        LINKID_DataType = "Image",
+        LINK_Main = 1,
+    })
+
+    -- Information outputs (for debugging/display)
+    OutPitch = self:AddOutput("Calculated Pitch", "CalcPitch", {
+        LINKID_DataType = "Number",
+        LINK_Main = 2,
+    })
+
+    OutYaw = self:AddOutput("Calculated Yaw", "CalcYaw", {
+        LINKID_DataType = "Number",
+        LINK_Main = 3,
+    })
+
+    OutRoll = self:AddOutput("Calculated Roll", "CalcRoll", {
+        LINKID_DataType = "Number",
+        LINK_Main = 4,
+    })
+end
+
+-- Convert normalized coordinates to spherical (lon, lat) for equirectangular
+function NormalizedToSpherical(x, y)
+    -- x: 0 to 1 maps to longitude -180 to 180
+    -- y: 0 to 1 maps to latitude 90 to -90 (top to bottom)
+    local lon = (x - 0.5) * 360.0  -- -180 to 180
+    local lat = (0.5 - y) * 180.0  -- 90 to -90
+    return lon, lat
+end
+
+-- Convert spherical coordinates to 3D unit vector
+function SphericalToVector(lon, lat)
+    local lonRad = math.rad(lon)
+    local latRad = math.rad(lat)
+
+    local x = math.cos(latRad) * math.sin(lonRad)
+    local y = math.sin(latRad)
+    local z = math.cos(latRad) * math.cos(lonRad)
+
+    return {x = x, y = y, z = z}
+end
+
+-- Vector operations
+function VectorLength(v)
+    return math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)
+end
+
+function VectorNormalize(v)
+    local len = VectorLength(v)
+    if len > 0.0001 then
+        return {x = v.x / len, y = v.y / len, z = v.z / len}
+    end
+    return {x = 0, y = 0, z = 1}
+end
+
+function VectorCross(a, b)
+    return {
+        x = a.y * b.z - a.z * b.y,
+        y = a.z * b.x - a.x * b.z,
+        z = a.x * b.y - a.y * b.x
+    }
+end
+
+function VectorDot(a, b)
+    return a.x * b.x + a.y * b.y + a.z * b.z
+end
+
+-- Calculate alignment angles from reference lines
+function CalculateAlignment(hx1, hy1, hx2, hy2, vx1, vy1, vx2, vy2)
+    -- Convert horizontal line points to 3D vectors
+    local hLon1, hLat1 = NormalizedToSpherical(hx1, hy1)
+    local hLon2, hLat2 = NormalizedToSpherical(hx2, hy2)
+    local hVec1 = SphericalToVector(hLon1, hLat1)
+    local hVec2 = SphericalToVector(hLon2, hLat2)
+
+    -- Convert vertical line points to 3D vectors
+    local vLon1, vLat1 = NormalizedToSpherical(vx1, vy1)
+    local vLon2, vLat2 = NormalizedToSpherical(vx2, vy2)
+    local vVec1 = SphericalToVector(vLon1, vLat1)
+    local vVec2 = SphericalToVector(vLon2, vLat2)
+
+    -- Calculate normal to the horizontal reference plane
+    -- The cross product of the two points gives us the normal
+    local horizNormal = VectorCross(hVec1, hVec2)
+    horizNormal = VectorNormalize(horizNormal)
+
+    -- Calculate pitch: angle between horizontal normal and XZ plane
+    -- Pitch is rotation around X axis
+    local pitch = math.deg(math.asin(horizNormal.y))
+
+    -- Calculate roll from the horizontal line
+    -- Roll is rotation around Z axis
+    local avgLat = (hLat1 + hLat2) / 2
+    local lonDiff = hLon2 - hLon1
+    local latDiff = hLat2 - hLat1
+    local roll = math.deg(math.atan2(latDiff, lonDiff))
+
+    -- Calculate yaw from the vertical line
+    -- Yaw is rotation around Y axis
+    local avgVLon = (vLon1 + vLon2) / 2
+    local yaw = -avgVLon
+
+    return pitch, yaw, roll
+end
+
+function Process(req)
+    local img = InImage:GetValue(req)
+    local mode = InAlignmentMode:GetValue(req).Value
+    local showOverlay = InShowOverlay:GetValue(req).Value == 1
+    local autoCalculate = InAutoCalculate:GetValue(req).Value == 1
+    local applyCorrection = InApplyCorrection:GetValue(req).Value == 1
+
+    if not img then
+        return
+    end
+
+    -- Get reference line coordinates
+    local hx1 = InHorizX1:GetValue(req).Value
+    local hy1 = InHorizY1:GetValue(req).Value
+    local hx2 = InHorizX2:GetValue(req).Value
+    local hy2 = InHorizY2:GetValue(req).Value
+
+    local vx1 = InVertX1:GetValue(req).Value
+    local vy1 = InVertY1:GetValue(req).Value
+    local vx2 = InVertX2:GetValue(req).Value
+    local vy2 = InVertY2:GetValue(req).Value
+
+    -- Calculate alignment if auto-calculate is enabled
+    local pitch, yaw, roll
+    if autoCalculate then
+        pitch, yaw, roll = CalculateAlignment(hx1, hy1, hx2, hy2, vx1, vy1, vx2, vy2)
+    else
+        pitch = InPitch:GetValue(req).Value
+        yaw = InYaw:GetValue(req).Value
+        roll = InRoll:GetValue(req).Value
+    end
+
+    -- Output calculated values
+    OutPitch:Set(req, pitch)
+    OutYaw:Set(req, yaw)
+    OutRoll:Set(req, roll)
+
+    local result = img
+
+    -- Apply correction using transformation matrix
+    if applyCorrection then
+        result = ApplyPanoCorrection(img, pitch, yaw, roll, req)
+    end
+
+    -- Add overlay if requested
+    if showOverlay then
+        result = AddOverlay(result, hx1, hy1, hx2, hy2, vx1, vy1, vx2, vy2, req)
+    end
+
+    OutImage:Set(req, result)
+end
+
+-- Apply panoramic correction using transformation
+function ApplyPanoCorrection(img, pitch, yaw, roll, req)
+    -- We'll use Fusion's built-in image processing
+    -- Create a duplicate image to work with
+    local width = img.Width
+    local height = img.Height
+
+    -- Create output image
+    local out = Image({IMG_Like = img})
+
+    -- Convert angles to radians
+    local pitchRad = math.rad(pitch)
+    local yawRad = math.rad(yaw)
+    local rollRad = math.rad(roll)
+
+    -- Rotation matrices
+    local cosPitch = math.cos(pitchRad)
+    local sinPitch = math.sin(pitchRad)
+    local cosYaw = math.cos(yawRad)
+    local sinYaw = math.sin(yawRad)
+    local cosRoll = math.cos(rollRad)
+    local sinRoll = math.sin(rollRad)
+
+    -- Process each pixel
+    local p = Pixel({A = 0, R = 0, G = 0, B = 0})
+
+    for y = 0, height - 1 do
+        for x = 0, width - 1 do
+            -- Normalize coordinates (0 to 1)
+            local nx = x / width
+            local ny = y / height
+
+            -- Convert to spherical coordinates
+            local lon = (nx - 0.5) * 360.0
+            local lat = (0.5 - ny) * 180.0
+
+            -- Convert to 3D vector
+            local vec = SphericalToVector(lon, lat)
+
+            -- Apply rotation (in reverse: roll, pitch, yaw)
+            -- Roll (around Z)
+            local x1 = vec.x * cosRoll - vec.y * sinRoll
+            local y1 = vec.x * sinRoll + vec.y * cosRoll
+            local z1 = vec.z
+
+            -- Pitch (around X)
+            local x2 = x1
+            local y2 = y1 * cosPitch - z1 * sinPitch
+            local z2 = y1 * sinPitch + z1 * cosPitch
+
+            -- Yaw (around Y)
+            local x3 = x2 * cosYaw + z2 * sinYaw
+            local y3 = y2
+            local z3 = -x2 * sinYaw + z2 * cosYaw
+
+            -- Convert back to spherical
+            local newLon = math.deg(math.atan2(x3, z3))
+            local newLat = math.deg(math.asin(math.max(-1, math.min(1, y3))))
+
+            -- Convert back to normalized coordinates
+            local srcX = (newLon / 360.0 + 0.5) * width
+            local srcY = (0.5 - newLat / 180.0) * height
+
+            -- Wrap around horizontally
+            srcX = srcX % width
+            if srcX < 0 then srcX = srcX + width end
+
+            -- Clamp vertically
+            srcY = math.max(0, math.min(height - 1, srcY))
+
+            -- Sample source image (bilinear interpolation would be better)
+            img:GetPixel(srcX, srcY, p)
+            out:SetPixel(x, y, p)
+        end
+    end
+
+    return out
+end
+
+-- Add visual overlay showing reference lines
+function AddOverlay(img, hx1, hy1, hx2, hy2, vx1, vy1, vx2, vy2, req)
+    local width = img.Width
+    local height = img.Height
+
+    -- Create a copy of the image
+    local out = img:CopyOf()
+
+    -- Draw horizontal reference line
+    DrawLine(out,
+        hx1 * width, hy1 * height,
+        hx2 * width, hy2 * height,
+        {R = 1.0, G = 0.0, B = 0.0, A = 1.0})  -- Red
+
+    -- Draw vertical reference line
+    DrawLine(out,
+        vx1 * width, vy1 * height,
+        vx2 * width, vy2 * height,
+        {R = 0.0, G = 1.0, B = 0.0, A = 1.0})  -- Green
+
+    -- Draw points
+    DrawPoint(out, hx1 * width, hy1 * height, {R = 1.0, G = 1.0, B = 0.0, A = 1.0})
+    DrawPoint(out, hx2 * width, hy2 * height, {R = 1.0, G = 1.0, B = 0.0, A = 1.0})
+    DrawPoint(out, vx1 * width, vy1 * height, {R = 0.0, G = 1.0, B = 1.0, A = 1.0})
+    DrawPoint(out, vx2 * width, vy2 * height, {R = 0.0, G = 1.0, B = 1.0, A = 1.0})
+
+    return out
+end
+
+-- Simple line drawing using Bresenham's algorithm
+function DrawLine(img, x1, y1, x2, y2, color)
+    x1 = math.floor(x1)
+    y1 = math.floor(y1)
+    x2 = math.floor(x2)
+    y2 = math.floor(y2)
+
+    local dx = math.abs(x2 - x1)
+    local dy = math.abs(y2 - y1)
+    local sx = x1 < x2 and 1 or -1
+    local sy = y1 < y2 and 1 or -1
+    local err = dx - dy
+
+    local p = Pixel(color)
+
+    while true do
+        if x1 >= 0 and x1 < img.Width and y1 >= 0 and y1 < img.Height then
+            img:SetPixel(x1, y1, p)
+        end
+
+        if x1 == x2 and y1 == y2 then break end
+
+        local e2 = 2 * err
+        if e2 > -dy then
+            err = err - dy
+            x1 = x1 + sx
+        end
+        if e2 < dx then
+            err = err + dx
+            y1 = y1 + sy
+        end
+    end
+end
+
+-- Draw a point (small cross)
+function DrawPoint(img, x, y, color)
+    local size = 5
+    DrawLine(img, x - size, y, x + size, y, color)
+    DrawLine(img, x, y - size, x, y + size, color)
+end
