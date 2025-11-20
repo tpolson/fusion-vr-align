@@ -74,6 +74,41 @@ function Create()
 
     self:EndControlNest()
 
+    -- Display calculated values
+    self:BeginControlNest("Calculated Values (Auto)", "CalcValues", true, {})
+
+    InCalcPitchDisplay = self:AddInput("Pitch", "CalcPitchDisplay", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinScale = -90.0,
+        INP_MaxScale = 90.0,
+        IC_Visible = true,
+        INP_Disabled = true,
+    })
+
+    InCalcYawDisplay = self:AddInput("Yaw", "CalcYawDisplay", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinScale = -180.0,
+        INP_MaxScale = 180.0,
+        IC_Visible = true,
+        INP_Disabled = true,
+    })
+
+    InCalcRollDisplay = self:AddInput("Roll", "CalcRollDisplay", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinScale = -180.0,
+        INP_MaxScale = 180.0,
+        IC_Visible = true,
+        INP_Disabled = true,
+    })
+
+    self:EndControlNest()
+
     -- Manual adjustment controls
     self:BeginControlNest("Manual Adjustments", "ManualAdjust", true, {})
 
@@ -99,6 +134,13 @@ function Create()
         INP_Default = 0.0,
         INP_MinScale = -180.0,
         INP_MaxScale = 180.0,
+    })
+
+    InApplyCalcButton = self:AddInput("Apply Calculated Values", "ApplyCalcButton", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "ButtonControl",
+        INP_DoNotifyChanged = true,
+        INP_External = false,
     })
 
     self:EndControlNest()
@@ -146,6 +188,27 @@ function Create()
         LINKID_DataType = "Number",
         LINK_Main = 4,
     })
+end
+
+function NotifyChanged(inp, param, time)
+    if inp == InApplyCalcButton then
+        -- Get current time
+        local t = time or self.Comp.CurrentTime
+
+        -- Get the calculated values from the display controls
+        local calcPitch = InCalcPitchDisplay:GetValue(t).Value
+        local calcYaw = InCalcYawDisplay:GetValue(t).Value
+        local calcRoll = InCalcRollDisplay:GetValue(t).Value
+
+        -- Apply to manual controls
+        InPitch:SetAttrs({INPID_InputControl = "SliderControl"})
+        InYaw:SetAttrs({INPID_InputControl = "SliderControl"})
+        InRoll:SetAttrs({INPID_InputControl = "SliderControl"})
+
+        InPitch[t] = calcPitch
+        InYaw[t] = calcYaw
+        InRoll[t] = calcRoll
+    end
 end
 
 -- Convert normalized coordinates to spherical (lon, lat) for equirectangular
@@ -266,13 +329,23 @@ function Process(req)
     local v2x1, v2y1 = v2p1.X, v2p1.Y
     local v2x2, v2y2 = v2p2.X, v2p2.Y
 
-    -- Calculate alignment if auto-calculate is enabled
+    -- Always calculate values for display
+    local calcPitch, calcYaw, calcRoll = CalculateAlignmentFromVerticals(
+        v1x1, v1y1, v1x2, v1y2,
+        v2x1, v2y1, v2x2, v2y2
+    )
+
+    -- Update display controls with calculated values
+    InCalcPitchDisplay:SetAttrs({INP_Default = calcPitch})
+    InCalcYawDisplay:SetAttrs({INP_Default = calcYaw})
+    InCalcRollDisplay:SetAttrs({INP_Default = calcRoll})
+
+    -- Determine which values to use for correction
     local pitch, yaw, roll
     if autoCalculate then
-        pitch, yaw, roll = CalculateAlignmentFromVerticals(
-            v1x1, v1y1, v1x2, v1y2,
-            v2x1, v2y1, v2x2, v2y2
-        )
+        pitch = calcPitch
+        yaw = calcYaw
+        roll = calcRoll
     else
         pitch = InPitch:GetValue(req).Value
         yaw = InYaw:GetValue(req).Value
@@ -280,9 +353,9 @@ function Process(req)
     end
 
     -- Output calculated values
-    OutPitch:Set(req, pitch)
-    OutYaw:Set(req, yaw)
-    OutRoll:Set(req, roll)
+    OutPitch:Set(req, calcPitch)
+    OutYaw:Set(req, calcYaw)
+    OutRoll:Set(req, calcRoll)
 
     local result = img
 
