@@ -376,6 +376,15 @@ function Process(req)
         calcYaw = InStoredYaw:GetValue(req).Value
         calcPitch = InStoredPitch:GetValue(req).Value
         calcRoll = InStoredRoll:GetValue(req).Value
+
+        -- Update label to show current stored values (order: Yaw, Pitch, Roll)
+        local calcLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", calcYaw, calcPitch, calcRoll)
+        InCalcInfoLabel:SetAttrs({LINKS_Name = calcLabelText})
+
+        -- Output stored values
+        OutYaw:Set(req, calcYaw)
+        OutPitch:Set(req, calcPitch)
+        OutRoll:Set(req, calcRoll)
     end
 
     -- Get manual offsets
@@ -393,8 +402,9 @@ function Process(req)
     InFinalInfoLabel:SetAttrs({LINKS_Name = finalLabelText})
 
     -- Apply transformation if we have any non-zero angles
+    -- Note: Yaw is negated to match standard panorama convention (positive = pan right)
     if calcYaw ~= 0 or calcPitch ~= 0 or calcRoll ~= 0 or yawOffset ~= 0 or pitchOffset ~= 0 or rollOffset ~= 0 then
-        result = ApplyPanoCorrection(img, finalYaw, -finalPitch, -finalRoll, req)
+        result = ApplyPanoCorrection(img, -finalYaw, -finalPitch, -finalRoll, req)
     end
 
     -- Add overlay if requested (shows on current result)
