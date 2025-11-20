@@ -138,6 +138,13 @@ function Create()
         INP_External = false,
     })
 
+    InResetPointsButton = self:AddInput("Reset Points", "ResetPointsButton", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "ButtonControl",
+        INP_DoNotifyChanged = true,
+        INP_External = false,
+    })
+
     self:EndControlNest()
 
     -- Internal flag to track if Apply has been clicked
@@ -208,6 +215,12 @@ function NotifyChanged(inp, param, time)
         InPitchOffset:SetSource(Number(0), time)
         InYawOffset:SetSource(Number(0), time)
         InRollOffset:SetSource(Number(0), time)
+    elseif inp == InResetPointsButton then
+        -- Reset all points to default positions
+        InVert1Point1:SetSource(Point(0.3, 0.2), time)
+        InVert1Point2:SetSource(Point(0.3, 0.8), time)
+        InVert2Point1:SetSource(Point(0.7, 0.2), time)
+        InVert2Point2:SetSource(Point(0.7, 0.8), time)
     end
 end
 
@@ -330,7 +343,8 @@ function Process(req)
 
     local result = img
 
-    -- Variables to hold the angles to use for transformation
+    -- COMMENTED OUT: Variables to hold the angles to use for transformation
+    --[[
     local calcPitch, calcYaw, calcRoll
 
     -- If Apply button was just clicked, calculate and store angles
@@ -383,6 +397,7 @@ function Process(req)
     if calcPitch ~= 0 or calcYaw ~= 0 or calcRoll ~= 0 or pitchOffset ~= 0 or yawOffset ~= 0 or rollOffset ~= 0 then
         result = ApplyPanoCorrection(img, -finalPitch, -finalYaw, -finalRoll, req)
     end
+    ]]--
 
     -- Add overlay if requested (shows on current result)
     if showOverlay then
