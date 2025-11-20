@@ -336,9 +336,9 @@ function Process(req)
     )
 
     -- Update display controls with calculated values
-    InCalcPitchDisplay:SetAttrs({INP_Default = calcPitch})
-    InCalcYawDisplay:SetAttrs({INP_Default = calcYaw})
-    InCalcRollDisplay:SetAttrs({INP_Default = calcRoll})
+    InCalcPitchDisplay[req.Time] = calcPitch
+    InCalcYawDisplay[req.Time] = calcYaw
+    InCalcRollDisplay[req.Time] = calcRoll
 
     -- Determine which values to use for correction
     local pitch, yaw, roll
@@ -457,31 +457,24 @@ function AddOverlay(img, v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x2, v2y2, req)
     -- Create a copy of the image
     local out = img:CopyOf()
 
-    -- Draw vertical line 1 (green)
-    DrawLine(out,
+    -- Draw vertical line 1 (green) with antialiasing
+    DrawLineAA(out,
         v1x1 * width, v1y1 * height,
         v1x2 * width, v1y2 * height,
-        {R = 0.0, G = 1.0, B = 0.0, A = 1.0})
+        {R = 0.0, G = 1.0, B = 0.0, A = 1.0}, 2)
 
-    -- Draw vertical line 2 (cyan)
-    DrawLine(out,
+    -- Draw vertical line 2 (cyan) with antialiasing
+    DrawLineAA(out,
         v2x1 * width, v2y1 * height,
         v2x2 * width, v2y2 * height,
-        {R = 0.0, G = 1.0, B = 1.0, A = 1.0})
-
-    -- Draw points for line 1 (yellow)
-    DrawPoint(out, v1x1 * width, v1y1 * height, {R = 1.0, G = 1.0, B = 0.0, A = 1.0}, 7)
-    DrawPoint(out, v1x2 * width, v1y2 * height, {R = 1.0, G = 1.0, B = 0.0, A = 1.0}, 7)
-
-    -- Draw points for line 2 (magenta)
-    DrawPoint(out, v2x1 * width, v2y1 * height, {R = 1.0, G = 0.0, B = 1.0, A = 1.0}, 7)
-    DrawPoint(out, v2x2 * width, v2y2 * height, {R = 1.0, G = 0.0, B = 1.0, A = 1.0}, 7)
+        {R = 0.0, G = 1.0, B = 1.0, A = 1.0}, 2)
 
     return out
 end
 
--- Simple line drawing using Bresenham's algorithm
-function DrawLine(img, x1, y1, x2, y2, color)
+-- Antialiased line drawing with thickness
+function DrawLineAA(img, x1, y1, x2, y2, color, thickness)
+    thickness = thickness or 1
     x1 = math.floor(x1)
     y1 = math.floor(y1)
     x2 = math.floor(x2)
@@ -493,11 +486,36 @@ function DrawLine(img, x1, y1, x2, y2, color)
     local sy = y1 < y2 and 1 or -1
     local err = dx - dy
 
-    local p = Pixel(color)
+    local lineColor = Pixel(color)
+    local srcPixel = Pixel()
 
     while true do
-        if x1 >= 0 and x1 < img.Width and y1 >= 0 and y1 < img.Height then
-            img:SetPixel(x1, y1, p)
+        -- Draw with thickness by drawing perpendicular to line direction
+        for t = -thickness, thickness do
+            local px, py
+            if dx > dy then
+                -- More horizontal, expand vertically
+                px = x1
+                py = y1 + t
+            else
+                -- More vertical, expand horizontally
+                px = x1 + t
+                py = y1
+            end
+
+            if px >= 0 and px < img.Width and py >= 0 and py < img.Height then
+                -- Simple alpha blending for smoother edges
+                local alpha = 1.0 - (math.abs(t) / (thickness + 1))
+                img:GetPixel(px, py, srcPixel)
+
+                local blended = Pixel({
+                    R = srcPixel.R * (1 - alpha) + lineColor.R * alpha,
+                    G = srcPixel.G * (1 - alpha) + lineColor.G * alpha,
+                    B = srcPixel.B * (1 - alpha) + lineColor.B * alpha,
+                    A = 1.0
+                })
+                img:SetPixel(px, py, blended)
+            end
         end
 
         if x1 == x2 and y1 == y2 then break end
@@ -510,28 +528,6 @@ function DrawLine(img, x1, y1, x2, y2, color)
         if e2 < dx then
             err = err + dx
             y1 = y1 + sy
-        end
-    end
-end
-
--- Draw a point (filled circle)
-function DrawPoint(img, x, y, color, size)
-    size = size or 5
-    local p = Pixel(color)
-
-    x = math.floor(x)
-    y = math.floor(y)
-
-    -- Draw a filled circle
-    for dy = -size, size do
-        for dx = -size, size do
-            if dx*dx + dy*dy <= size*size then
-                local px = x + dx
-                local py = y + dy
-                if px >= 0 and px < img.Width and py >= 0 and py < img.Height then
-                    img:SetPixel(px, py, p)
-                end
-            end
         end
     end
 end
