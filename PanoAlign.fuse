@@ -394,7 +394,7 @@ function Process(req)
 
     -- Apply transformation if we have any non-zero angles
     if calcPitch ~= 0 or calcYaw ~= 0 or calcRoll ~= 0 or pitchOffset ~= 0 or yawOffset ~= 0 or rollOffset ~= 0 then
-        result = ApplyPanoCorrection(img, -finalPitch, -finalYaw, -finalRoll, req)
+        result = ApplyPanoCorrection(img, -finalPitch, finalYaw, -finalRoll, req)
     end
 
     -- Add overlay if requested (shows on current result)
