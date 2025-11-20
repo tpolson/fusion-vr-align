@@ -186,6 +186,9 @@ function NotifyChanged(inp, param, time)
             v2x1, v2y1, v2x2, v2y2
         )
 
+        -- Disable Auto Calculate mode so manual values take effect
+        InAutoCalculate[t] = 0
+
         -- Apply to manual controls
         InPitch[t] = calcPitch
         InYaw[t] = calcYaw
