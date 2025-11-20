@@ -343,8 +343,7 @@ function Process(req)
 
     local result = img
 
-    -- COMMENTED OUT: Variables to hold the angles to use for transformation
-    --[[
+    -- Variables to hold the angles to use for transformation
     local calcPitch, calcYaw, calcRoll
 
     -- If Apply button was just clicked, calculate and store angles
@@ -397,7 +396,6 @@ function Process(req)
     if calcPitch ~= 0 or calcYaw ~= 0 or calcRoll ~= 0 or pitchOffset ~= 0 or yawOffset ~= 0 or rollOffset ~= 0 then
         result = ApplyPanoCorrection(img, -finalPitch, -finalYaw, -finalRoll, req)
     end
-    ]]--
 
     -- Add overlay if requested (shows on current result)
     if showOverlay then
