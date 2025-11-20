@@ -401,10 +401,11 @@ function Process(req)
     local finalLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", finalYaw, finalPitch, finalRoll)
     InFinalInfoLabel:SetAttrs({LINKS_Name = finalLabelText})
 
-    -- Apply transformation if we have any non-zero angles
-    -- Note: Yaw is negated to match standard panorama convention (positive = pan right)
-    if calcYaw ~= 0 or calcPitch ~= 0 or calcRoll ~= 0 or yawOffset ~= 0 or pitchOffset ~= 0 or rollOffset ~= 0 then
-        result = ApplyPanoCorrection(img, -finalYaw, -finalPitch, -finalRoll, req)
+    -- Apply transformation ONLY when Apply is clicked OR manual offsets are non-zero
+    -- This prevents expensive transformation during point dragging
+    -- Yaw is NOT negated to match standard panorama convention
+    if applied or yawOffset ~= 0 or pitchOffset ~= 0 or rollOffset ~= 0 then
+        result = ApplyPanoCorrection(img, finalYaw, -finalPitch, -finalRoll, req)
     end
 
     -- Add overlay if requested (shows on current result)
