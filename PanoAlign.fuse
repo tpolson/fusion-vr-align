@@ -317,7 +317,7 @@ function CalculateAlignmentFromVerticals(v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x
     -- Keep at 0 - user can manually adjust if needed
     local yaw = 0
 
-    return pitch, yaw, roll
+    return yaw, pitch, roll
 end
 
 function Process(req)
@@ -344,20 +344,20 @@ function Process(req)
     local result = img
 
     -- Variables to hold the angles to use for transformation
-    local calcPitch, calcYaw, calcRoll
+    local calcYaw, calcPitch, calcRoll
 
     -- If Apply button was just clicked, calculate and store angles
     if applied then
         -- Calculate values from reference lines
-        calcPitch, calcYaw, calcRoll = CalculateAlignmentFromVerticals(
+        calcYaw, calcPitch, calcRoll = CalculateAlignmentFromVerticals(
             v1x1, v1y1, v1x2, v1y2,
             v2x1, v2y1, v2x2, v2y2
         )
 
         -- Store the calculated angles for future frames
         -- Note: SetSource is asynchronous and won't take effect until next frame
-        InStoredPitch:SetSource(Number(calcPitch), req.Time)
         InStoredYaw:SetSource(Number(calcYaw), req.Time)
+        InStoredPitch:SetSource(Number(calcPitch), req.Time)
         InStoredRoll:SetSource(Number(calcRoll), req.Time)
 
         -- Update calculated values label (order: Yaw, Pitch, Roll)
@@ -365,27 +365,27 @@ function Process(req)
         InCalcInfoLabel:SetAttrs({LINKS_Name = calcLabelText})
 
         -- Output calculated values
-        OutPitch:Set(req, calcPitch)
         OutYaw:Set(req, calcYaw)
+        OutPitch:Set(req, calcPitch)
         OutRoll:Set(req, calcRoll)
 
         -- Reset the Applied flag
         InApplied:SetSource(Number(0), req.Time)
     else
         -- Not currently applying, so use stored angles from previous Apply
-        calcPitch = InStoredPitch:GetValue(req).Value
         calcYaw = InStoredYaw:GetValue(req).Value
+        calcPitch = InStoredPitch:GetValue(req).Value
         calcRoll = InStoredRoll:GetValue(req).Value
     end
 
     -- Get manual offsets
-    local pitchOffset = InPitchOffset:GetValue(req).Value
     local yawOffset = InYawOffset:GetValue(req).Value
+    local pitchOffset = InPitchOffset:GetValue(req).Value
     local rollOffset = InRollOffset:GetValue(req).Value
 
     -- Calculate final values (calculated/stored + offsets)
-    local finalPitch = calcPitch + pitchOffset
     local finalYaw = calcYaw + yawOffset
+    local finalPitch = calcPitch + pitchOffset
     local finalRoll = calcRoll + rollOffset
 
     -- Update final values label (order: Yaw, Pitch, Roll)
@@ -393,8 +393,8 @@ function Process(req)
     InFinalInfoLabel:SetAttrs({LINKS_Name = finalLabelText})
 
     -- Apply transformation if we have any non-zero angles
-    if calcPitch ~= 0 or calcYaw ~= 0 or calcRoll ~= 0 or pitchOffset ~= 0 or yawOffset ~= 0 or rollOffset ~= 0 then
-        result = ApplyPanoCorrection(img, -finalPitch, finalYaw, -finalRoll, req)
+    if calcYaw ~= 0 or calcPitch ~= 0 or calcRoll ~= 0 or yawOffset ~= 0 or pitchOffset ~= 0 or rollOffset ~= 0 then
+        result = ApplyPanoCorrection(img, finalYaw, -finalPitch, -finalRoll, req)
     end
 
     -- Add overlay if requested (shows on current result)
@@ -407,7 +407,7 @@ function Process(req)
 end
 
 -- Apply panoramic correction using transformation
-function ApplyPanoCorrection(img, pitch, yaw, roll, req)
+function ApplyPanoCorrection(img, yaw, pitch, roll, req)
     local width = img.Width
     local height = img.Height
 
@@ -415,8 +415,8 @@ function ApplyPanoCorrection(img, pitch, yaw, roll, req)
     local out = Image({IMG_Like = img})
 
     -- Convert angles to radians
-    local pitchRad = math.rad(pitch)
     local yawRad = math.rad(yaw)
+    local pitchRad = math.rad(pitch)
     local rollRad = math.rad(roll)
 
     -- Rotation matrices
@@ -484,7 +484,7 @@ function ApplyPanoCorrection(img, pitch, yaw, roll, req)
 end
 
 -- Transform a normalized coordinate through the rotation
-function TransformPoint(nx, ny, pitch, yaw, roll)
+function TransformPoint(nx, ny, yaw, pitch, roll)
     -- Convert to spherical coordinates
     local lon = (nx - 0.5) * 360.0
     local lat = (0.5 - ny) * 180.0
@@ -493,8 +493,8 @@ function TransformPoint(nx, ny, pitch, yaw, roll)
     local vec = SphericalToVector(lon, lat)
 
     -- Convert angles to radians
-    local pitchRad = math.rad(pitch)
     local yawRad = math.rad(yaw)
+    local pitchRad = math.rad(pitch)
     local rollRad = math.rad(roll)
 
     local cosPitch = math.cos(pitchRad)
