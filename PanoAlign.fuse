@@ -3,19 +3,19 @@ Pano Align Fuse for Blackmagic Fusion
 Aligns 360 degree equirectangular/latlong panoramic images
 
 This tool allows you to define two vertical reference lines in your panorama
-by dragging points in the viewer. The tool calculates the pitch, yaw, and
-roll needed to align the image properly.
+by dragging points in the viewer. The tool calculates the pitch and roll
+needed to align the image properly.
 
 Usage:
 1. Connect your 360 latlong image
 2. Drag the on-screen points to define two vertical lines
    (choose features that should be vertical in real world)
-3. Enable "Apply Correction" checkbox to see aligned result
+3. Click "Apply" button to calculate and apply alignment
 4. Use Manual Offsets to fine-tune (additive to calculated values)
-5. Click Reset Offsets button to clear manual adjustments
+5. Click "Reset Offsets" to clear manual adjustments
 
 Author: Created for panoramic image alignment
-Version: 3.2
+Version: 4.0
 ]]--
 
 FuRegisterClass("PanoAlign", CT_Tool, {
@@ -124,6 +124,13 @@ function Create()
         ICD_Width = 1,
     })
 
+    InApplyButton = self:AddInput("Apply", "ApplyButton", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "ButtonControl",
+        INP_DoNotifyChanged = true,
+        INP_External = false,
+    })
+
     InResetButton = self:AddInput("Reset Offsets", "ResetButton", {
         LINKID_DataType = "Number",
         INPID_InputControl = "ButtonControl",
@@ -133,18 +140,19 @@ function Create()
 
     self:EndControlNest()
 
+    -- Internal flag to track if Apply has been clicked
+    InApplied = self:AddInput("Applied", "Applied", {
+        LINKID_DataType = "Number",
+        INP_Default = 0,
+        INP_Integer = true,
+        IC_Visible = false,
+    })
+
     -- Processing options
     InShowOverlay = self:AddInput("Show Reference Lines", "ShowOverlay", {
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
         INP_Default = 1.0,
-        INP_Integer = true,
-    })
-
-    InApplyCorrection = self:AddInput("Apply Correction", "ApplyCorrection", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "CheckboxControl",
-        INP_Default = 0.0,
         INP_Integer = true,
     })
 
@@ -172,12 +180,14 @@ function Create()
 end
 
 function NotifyChanged(inp, param, time)
-    if inp == InResetButton then
+    if inp == InApplyButton then
+        -- Set applied flag to trigger correction
+        InApplied:SetAttrs({INP_Default = 1})
+    elseif inp == InResetButton then
         -- Reset all offsets to zero
-        local t = time or self.Comp.CurrentTime
-        InPitchOffset[t] = 0
-        InYawOffset[t] = 0
-        InRollOffset[t] = 0
+        InPitchOffset:SetAttrs({INP_Default = 0})
+        InYawOffset:SetAttrs({INP_Default = 0})
+        InRollOffset:SetAttrs({INP_Default = 0})
     end
 end
 
@@ -280,7 +290,7 @@ end
 function Process(req)
     local img = InImage:GetValue(req)
     local showOverlay = InShowOverlay:GetValue(req).Value == 1
-    local applyCorrection = InApplyCorrection:GetValue(req).Value == 1
+    local applied = InApplied:GetValue(req).Value == 1
 
     if not img then
         return
@@ -329,8 +339,8 @@ function Process(req)
 
     local result = img
 
-    -- Only apply correction if checkbox is enabled
-    if applyCorrection then
+    -- Only apply correction if Apply button has been clicked
+    if applied then
         result = ApplyPanoCorrection(img, finalPitch, finalYaw, finalRoll, req)
     end
 
