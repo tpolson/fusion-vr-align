@@ -390,21 +390,21 @@ function ApplyPanoCorrection(img, pitch, yaw, roll, req)
             -- Convert to 3D vector
             local vec = SphericalToVector(lon, lat)
 
-            -- Apply rotation (in reverse: roll, pitch, yaw)
-            -- Roll (around Z)
-            local x1 = vec.x * cosRoll - vec.y * sinRoll
-            local y1 = vec.x * sinRoll + vec.y * cosRoll
-            local z1 = vec.z
+            -- Apply rotation in correct order: Yaw, Pitch, Roll
+            -- Yaw (around Y axis) - applied first
+            local x1 = vec.x * cosYaw + vec.z * sinYaw
+            local y1 = vec.y
+            local z1 = -vec.x * sinYaw + vec.z * cosYaw
 
-            -- Pitch (around X)
+            -- Pitch (around X axis) - applied second
             local x2 = x1
             local y2 = y1 * cosPitch - z1 * sinPitch
             local z2 = y1 * sinPitch + z1 * cosPitch
 
-            -- Yaw (around Y)
-            local x3 = x2 * cosYaw + z2 * sinYaw
-            local y3 = y2
-            local z3 = -x2 * sinYaw + z2 * cosYaw
+            -- Roll (around Z axis) - applied last
+            local x3 = x2 * cosRoll - y2 * sinRoll
+            local y3 = x2 * sinRoll + y2 * cosRoll
+            local z3 = z2
 
             -- Convert back to spherical
             local newLon = math.deg(math.atan2(x3, z3))
