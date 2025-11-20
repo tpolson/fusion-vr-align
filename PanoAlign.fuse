@@ -341,8 +341,9 @@ function Process(req)
     local result = img
 
     -- Only apply correction if Apply button has been clicked
+    -- Negate angles to correct the tilt (not increase it)
     if applied then
-        result = ApplyPanoCorrection(img, finalPitch, finalYaw, finalRoll, req)
+        result = ApplyPanoCorrection(img, -finalPitch, -finalYaw, -finalRoll, req)
     end
 
     -- Add overlay if requested (shows on current result)
@@ -480,6 +481,7 @@ function TransformPoint(nx, ny, pitch, yaw, roll)
 end
 
 -- Add visual overlay showing reference lines
+-- Lines are always drawn at the original point positions to match the on-screen markers
 function AddOverlay(img, v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x2, v2y2,
                    applied, pitch, yaw, roll, req)
     local width = img.Width
@@ -488,27 +490,19 @@ function AddOverlay(img, v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x2, v2y2,
     -- Create a copy of the image
     local out = img:CopyOf()
 
-    -- If correction has been applied, transform the line coordinates
-    local line1x1, line1y1, line1x2, line1y2 = v1x1, v1y1, v1x2, v1y2
-    local line2x1, line2y1, line2x2, line2y2 = v2x1, v2y1, v2x2, v2y2
-
-    if applied then
-        line1x1, line1y1 = TransformPoint(v1x1, v1y1, pitch, yaw, roll)
-        line1x2, line1y2 = TransformPoint(v1x2, v1y2, pitch, yaw, roll)
-        line2x1, line2y1 = TransformPoint(v2x1, v2y1, pitch, yaw, roll)
-        line2x2, line2y2 = TransformPoint(v2x2, v2y2, pitch, yaw, roll)
-    end
+    -- Draw lines at original positions (don't transform them)
+    -- This ensures they align with the on-screen point markers
 
     -- Draw vertical line 1 (green) with antialiasing
     DrawLineAA(out,
-        line1x1 * width, line1y1 * height,
-        line1x2 * width, line1y2 * height,
+        v1x1 * width, v1y1 * height,
+        v1x2 * width, v1y2 * height,
         {R = 0.0, G = 1.0, B = 0.0, A = 1.0}, 2)
 
     -- Draw vertical line 2 (cyan) with antialiasing
     DrawLineAA(out,
-        line2x1 * width, line2y1 * height,
-        line2x2 * width, line2y2 * height,
+        v2x1 * width, v2y1 * height,
+        v2x2 * width, v2y2 * height,
         {R = 0.0, G = 1.0, B = 1.0, A = 1.0}, 2)
 
     return out
