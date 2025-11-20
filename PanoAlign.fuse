@@ -347,7 +347,8 @@ function Process(req)
 
     -- Add overlay if requested (shows on current result)
     if showOverlay then
-        result = AddOverlay(result, v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x2, v2y2, req)
+        result = AddOverlay(result, v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x2, v2y2,
+                          applied, finalPitch, finalYaw, finalRoll, req)
     end
 
     OutImage:Set(req, result)
@@ -430,24 +431,84 @@ function ApplyPanoCorrection(img, pitch, yaw, roll, req)
     return out
 end
 
+-- Transform a normalized coordinate through the rotation
+function TransformPoint(nx, ny, pitch, yaw, roll)
+    -- Convert to spherical coordinates
+    local lon = (nx - 0.5) * 360.0
+    local lat = (0.5 - ny) * 180.0
+
+    -- Convert to 3D vector
+    local vec = SphericalToVector(lon, lat)
+
+    -- Convert angles to radians
+    local pitchRad = math.rad(pitch)
+    local yawRad = math.rad(yaw)
+    local rollRad = math.rad(roll)
+
+    local cosPitch = math.cos(pitchRad)
+    local sinPitch = math.sin(pitchRad)
+    local cosYaw = math.cos(yawRad)
+    local sinYaw = math.sin(yawRad)
+    local cosRoll = math.cos(rollRad)
+    local sinRoll = math.sin(rollRad)
+
+    -- Apply rotation in correct order: Yaw, Pitch, Roll
+    -- Yaw (around Y axis) - applied first
+    local x1 = vec.x * cosYaw + vec.z * sinYaw
+    local y1 = vec.y
+    local z1 = -vec.x * sinYaw + vec.z * cosYaw
+
+    -- Pitch (around X axis) - applied second
+    local x2 = x1
+    local y2 = y1 * cosPitch - z1 * sinPitch
+    local z2 = y1 * sinPitch + z1 * cosPitch
+
+    -- Roll (around Z axis) - applied last
+    local x3 = x2 * cosRoll - y2 * sinRoll
+    local y3 = x2 * sinRoll + y2 * cosRoll
+    local z3 = z2
+
+    -- Convert back to spherical
+    local newLon = math.deg(math.atan2(x3, z3))
+    local newLat = math.deg(math.asin(math.max(-1, math.min(1, y3))))
+
+    -- Convert back to normalized coordinates
+    local newNx = newLon / 360.0 + 0.5
+    local newNy = 0.5 - newLat / 180.0
+
+    return newNx, newNy
+end
+
 -- Add visual overlay showing reference lines
-function AddOverlay(img, v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x2, v2y2, req)
+function AddOverlay(img, v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x2, v2y2,
+                   applied, pitch, yaw, roll, req)
     local width = img.Width
     local height = img.Height
 
     -- Create a copy of the image
     local out = img:CopyOf()
 
+    -- If correction has been applied, transform the line coordinates
+    local line1x1, line1y1, line1x2, line1y2 = v1x1, v1y1, v1x2, v1y2
+    local line2x1, line2y1, line2x2, line2y2 = v2x1, v2y1, v2x2, v2y2
+
+    if applied then
+        line1x1, line1y1 = TransformPoint(v1x1, v1y1, pitch, yaw, roll)
+        line1x2, line1y2 = TransformPoint(v1x2, v1y2, pitch, yaw, roll)
+        line2x1, line2y1 = TransformPoint(v2x1, v2y1, pitch, yaw, roll)
+        line2x2, line2y2 = TransformPoint(v2x2, v2y2, pitch, yaw, roll)
+    end
+
     -- Draw vertical line 1 (green) with antialiasing
     DrawLineAA(out,
-        v1x1 * width, v1y1 * height,
-        v1x2 * width, v1y2 * height,
+        line1x1 * width, line1y1 * height,
+        line1x2 * width, line1y2 * height,
         {R = 0.0, G = 1.0, B = 0.0, A = 1.0}, 2)
 
     -- Draw vertical line 2 (cyan) with antialiasing
     DrawLineAA(out,
-        v2x1 * width, v2y1 * height,
-        v2x2 * width, v2y2 * height,
+        line2x1 * width, line2y1 * height,
+        line2x2 * width, line2y2 * height,
         {R = 0.0, G = 1.0, B = 1.0, A = 1.0}, 2)
 
     return out
