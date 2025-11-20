@@ -182,12 +182,27 @@ end
 function NotifyChanged(inp, param, time)
     if inp == InApplyButton then
         -- Set the Applied flag to trigger correction
-        InApplied[time] = 1
+        -- Create a BezierSpline if one doesn't exist
+        if not InApplied:GetSource() then
+            InApplied:SetSource(BezierSpline(), 0)
+        end
+        InApplied:GetSource():SetKeyFrame(time, 1)
     elseif inp == InResetButton then
-        -- Reset all offsets to zero
-        InPitchOffset[time] = 0
-        InYawOffset[time] = 0
-        InRollOffset[time] = 0
+        -- Reset all offsets to zero by setting keyframes
+        if not InPitchOffset:GetSource() then
+            InPitchOffset:SetSource(BezierSpline(), 0)
+        end
+        InPitchOffset:GetSource():SetKeyFrame(time, 0)
+
+        if not InYawOffset:GetSource() then
+            InYawOffset:SetSource(BezierSpline(), 0)
+        end
+        InYawOffset:GetSource():SetKeyFrame(time, 0)
+
+        if not InRollOffset:GetSource() then
+            InRollOffset:SetSource(BezierSpline(), 0)
+        end
+        InRollOffset:GetSource():SetKeyFrame(time, 0)
     end
 end
 
