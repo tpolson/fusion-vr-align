@@ -237,9 +237,9 @@ function CalculateAlignmentFromVerticals(v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x
     -- Roll is the angle in the XY plane
     local roll = math.deg(math.atan2(avgDir.x, avgDir.y))
 
-    -- Calculate yaw from the average longitude of both lines
-    local avgLon = ((v1Lon1 + v1Lon2) / 2 + (v2Lon1 + v2Lon2) / 2) / 2
-    local yaw = -avgLon
+    -- Yaw (left/right pan) is not determined by vertical lines
+    -- Keep at 0 - user can manually adjust if needed
+    local yaw = 0
 
     return pitch, yaw, roll
 end
