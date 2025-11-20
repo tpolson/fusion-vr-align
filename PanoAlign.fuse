@@ -168,16 +168,25 @@ function NotifyChanged(inp, param, time)
         -- Get current time
         local t = time or self.Comp.CurrentTime
 
-        -- Get the calculated values from the outputs
-        local calcPitch = OutPitch:GetValue(t)
-        local calcYaw = OutYaw:GetValue(t)
-        local calcRoll = OutRoll:GetValue(t)
+        -- Get point coordinates
+        local v1p1 = InVert1Point1:GetValue(t)
+        local v1p2 = InVert1Point2:GetValue(t)
+        local v2p1 = InVert2Point1:GetValue(t)
+        local v2p2 = InVert2Point2:GetValue(t)
+
+        -- Extract X and Y from Point objects
+        local v1x1, v1y1 = v1p1.X, v1p1.Y
+        local v1x2, v1y2 = v1p2.X, v1p2.Y
+        local v2x1, v2y1 = v2p1.X, v2p1.Y
+        local v2x2, v2y2 = v2p2.X, v2p2.Y
+
+        -- Calculate values
+        local calcPitch, calcYaw, calcRoll = CalculateAlignmentFromVerticals(
+            v1x1, v1y1, v1x2, v1y2,
+            v2x1, v2y1, v2x2, v2y2
+        )
 
         -- Apply to manual controls
-        InPitch:SetAttrs({INPID_InputControl = "SliderControl"})
-        InYaw:SetAttrs({INPID_InputControl = "SliderControl"})
-        InRoll:SetAttrs({INPID_InputControl = "SliderControl"})
-
         InPitch[t] = calcPitch
         InYaw[t] = calcYaw
         InRoll[t] = calcRoll
