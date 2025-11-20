@@ -38,7 +38,7 @@ function Create()
     })
 
     -- Connect input to PanoMap
-    InImage:ConnectTo(self.PanoMap:FindMainInput(1))
+    InImage:ConnectTo(self.PanoMap:GetInput("Input"))
 
     -- Vertical Line 1
     self:BeginControlNest("Vertical Line 1", "VertLine1", true, {})
@@ -373,7 +373,7 @@ function Process(req)
     self.PanoMap:SetInput("Roll", -finalRoll, req.Time)
 
     -- Get the transformed image from PanoMap
-    result = self.PanoMap:GetOutput():GetValue(req)
+    result = self.PanoMap:GetOutput("Output"):GetValue(req)
 
     -- Add overlay if requested (always draw on current result)
     if showOverlay then
