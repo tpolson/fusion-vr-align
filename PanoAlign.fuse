@@ -309,47 +309,47 @@ function Process(req)
     local v2x1, v2y1 = v2p1.X, v2p1.Y
     local v2x2, v2y2 = v2p2.X, v2p2.Y
 
-    -- Always calculate values from reference lines
-    local calcPitch, calcYaw, calcRoll = CalculateAlignmentFromVerticals(
-        v1x1, v1y1, v1x2, v1y2,
-        v2x1, v2y1, v2x2, v2y2
-    )
-
-    -- Get manual offset values
-    local pitchOffset = InPitchOffset:GetValue(req).Value
-    local yawOffset = InYawOffset:GetValue(req).Value
-    local rollOffset = InRollOffset:GetValue(req).Value
-
-    -- Calculate final values (calculated + offsets)
-    local finalPitch = calcPitch + pitchOffset
-    local finalYaw = calcYaw + yawOffset
-    local finalRoll = calcRoll + rollOffset
-
-    -- Update calculated values label (order: Yaw, Pitch, Roll)
-    local calcLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", calcYaw, calcPitch, calcRoll)
-    InCalcInfoLabel:SetAttrs({LINKS_Name = calcLabelText})
-
-    -- Update final values label (order: Yaw, Pitch, Roll)
-    local finalLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", finalYaw, finalPitch, finalRoll)
-    InFinalInfoLabel:SetAttrs({LINKS_Name = finalLabelText})
-
-    -- Output calculated values
-    OutPitch:Set(req, calcPitch)
-    OutYaw:Set(req, calcYaw)
-    OutRoll:Set(req, calcRoll)
-
     local result = img
 
-    -- Only apply correction if Apply button has been clicked
-    -- Negate angles to correct the tilt (not increase it)
+    -- Only calculate and apply when Apply button has been clicked
     if applied then
+        -- Calculate values from reference lines
+        local calcPitch, calcYaw, calcRoll = CalculateAlignmentFromVerticals(
+            v1x1, v1y1, v1x2, v1y2,
+            v2x1, v2y1, v2x2, v2y2
+        )
+
+        -- Get manual offset values
+        local pitchOffset = InPitchOffset:GetValue(req).Value
+        local yawOffset = InYawOffset:GetValue(req).Value
+        local rollOffset = InRollOffset:GetValue(req).Value
+
+        -- Calculate final values (calculated + offsets)
+        local finalPitch = calcPitch + pitchOffset
+        local finalYaw = calcYaw + yawOffset
+        local finalRoll = calcRoll + rollOffset
+
+        -- Update calculated values label (order: Yaw, Pitch, Roll)
+        local calcLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", calcYaw, calcPitch, calcRoll)
+        InCalcInfoLabel:SetAttrs({LINKS_Name = calcLabelText})
+
+        -- Update final values label (order: Yaw, Pitch, Roll)
+        local finalLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", finalYaw, finalPitch, finalRoll)
+        InFinalInfoLabel:SetAttrs({LINKS_Name = finalLabelText})
+
+        -- Output calculated values
+        OutPitch:Set(req, calcPitch)
+        OutYaw:Set(req, calcYaw)
+        OutRoll:Set(req, calcRoll)
+
+        -- Apply correction - negate angles to correct the tilt (not increase it)
         result = ApplyPanoCorrection(img, -finalPitch, -finalYaw, -finalRoll, req)
     end
 
     -- Add overlay if requested (shows on current result)
     if showOverlay then
         result = AddOverlay(result, v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x2, v2y2,
-                          applied, finalPitch, finalYaw, finalRoll, req)
+                          applied, 0, 0, 0, req)
     end
 
     OutImage:Set(req, result)
