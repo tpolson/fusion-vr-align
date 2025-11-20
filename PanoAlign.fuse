@@ -181,13 +181,13 @@ end
 
 function NotifyChanged(inp, param, time)
     if inp == InApplyButton then
-        -- Set applied flag using SetSource for immediate effect
-        InApplied:SetSource(Number(1), 0)
+        -- Set the Applied flag to trigger correction
+        self.InApplied[time] = 1
     elseif inp == InResetButton then
-        -- Reset all offsets to zero using SetSource
-        InPitchOffset:SetSource(Number(0), 0)
-        InYawOffset:SetSource(Number(0), 0)
-        InRollOffset:SetSource(Number(0), 0)
+        -- Reset all offsets to zero
+        self.InPitchOffset[time] = 0
+        self.InYawOffset[time] = 0
+        self.InRollOffset[time] = 0
     end
 end
 
