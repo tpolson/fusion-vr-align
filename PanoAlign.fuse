@@ -325,12 +325,12 @@ function Process(req)
     local finalYaw = calcYaw + yawOffset
     local finalRoll = calcRoll + rollOffset
 
-    -- Update calculated values label
-    local calcLabelText = string.format("Pitch: %.2f°  Yaw: %.2f°  Roll: %.2f°", calcPitch, calcYaw, calcRoll)
+    -- Update calculated values label (order: Yaw, Pitch, Roll)
+    local calcLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", calcYaw, calcPitch, calcRoll)
     InCalcInfoLabel:SetAttrs({LINKS_Name = calcLabelText})
 
-    -- Update final values label
-    local finalLabelText = string.format("Pitch: %.2f°  Yaw: %.2f°  Roll: %.2f°", finalPitch, finalYaw, finalRoll)
+    -- Update final values label (order: Yaw, Pitch, Roll)
+    local finalLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", finalYaw, finalPitch, finalRoll)
     InFinalInfoLabel:SetAttrs({LINKS_Name = finalLabelText})
 
     -- Output calculated values
