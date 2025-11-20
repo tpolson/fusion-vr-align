@@ -148,6 +148,25 @@ function Create()
         IC_Visible = false,
     })
 
+    -- Stored calculated angles (set when Apply is clicked)
+    InStoredPitch = self:AddInput("Stored Pitch", "StoredPitch", {
+        LINKID_DataType = "Number",
+        INP_Default = 0,
+        IC_Visible = false,
+    })
+
+    InStoredYaw = self:AddInput("Stored Yaw", "StoredYaw", {
+        LINKID_DataType = "Number",
+        INP_Default = 0,
+        IC_Visible = false,
+    })
+
+    InStoredRoll = self:AddInput("Stored Roll", "StoredRoll", {
+        LINKID_DataType = "Number",
+        INP_Default = 0,
+        IC_Visible = false,
+    })
+
     -- Processing options
     InShowOverlay = self:AddInput("Show Reference Lines", "ShowOverlay", {
         LINKID_DataType = "Number",
@@ -311,7 +330,7 @@ function Process(req)
 
     local result = img
 
-    -- Only calculate and apply when Apply button has been clicked
+    -- If Apply button was just clicked, calculate and store angles
     if applied then
         -- Calculate values from reference lines
         local calcPitch, calcYaw, calcRoll = CalculateAlignmentFromVerticals(
@@ -319,40 +338,51 @@ function Process(req)
             v2x1, v2y1, v2x2, v2y2
         )
 
-        -- Get manual offset values
-        local pitchOffset = InPitchOffset:GetValue(req).Value
-        local yawOffset = InYawOffset:GetValue(req).Value
-        local rollOffset = InRollOffset:GetValue(req).Value
-
-        -- Calculate final values (calculated + offsets)
-        local finalPitch = calcPitch + pitchOffset
-        local finalYaw = calcYaw + yawOffset
-        local finalRoll = calcRoll + rollOffset
+        -- Store the calculated angles
+        InStoredPitch:SetSource(Number(calcPitch), req.Time)
+        InStoredYaw:SetSource(Number(calcYaw), req.Time)
+        InStoredRoll:SetSource(Number(calcRoll), req.Time)
 
         -- Update calculated values label (order: Yaw, Pitch, Roll)
         local calcLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", calcYaw, calcPitch, calcRoll)
         InCalcInfoLabel:SetAttrs({LINKS_Name = calcLabelText})
-
-        -- Update final values label (order: Yaw, Pitch, Roll)
-        local finalLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", finalYaw, finalPitch, finalRoll)
-        InFinalInfoLabel:SetAttrs({LINKS_Name = finalLabelText})
 
         -- Output calculated values
         OutPitch:Set(req, calcPitch)
         OutYaw:Set(req, calcYaw)
         OutRoll:Set(req, calcRoll)
 
-        -- Apply correction - negate angles to correct the tilt (not increase it)
-        result = ApplyPanoCorrection(img, -finalPitch, -finalYaw, -finalRoll, req)
-
-        -- Reset the Applied flag so it doesn't stay on
+        -- Reset the Applied flag
         InApplied:SetSource(Number(0), req.Time)
+    end
+
+    -- Get stored angles and manual offsets
+    local storedPitch = InStoredPitch:GetValue(req).Value
+    local storedYaw = InStoredYaw:GetValue(req).Value
+    local storedRoll = InStoredRoll:GetValue(req).Value
+
+    local pitchOffset = InPitchOffset:GetValue(req).Value
+    local yawOffset = InYawOffset:GetValue(req).Value
+    local rollOffset = InRollOffset:GetValue(req).Value
+
+    -- Calculate final values (stored + offsets)
+    local finalPitch = storedPitch + pitchOffset
+    local finalYaw = storedYaw + yawOffset
+    local finalRoll = storedRoll + rollOffset
+
+    -- Update final values label (order: Yaw, Pitch, Roll)
+    local finalLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", finalYaw, finalPitch, finalRoll)
+    InFinalInfoLabel:SetAttrs({LINKS_Name = finalLabelText})
+
+    -- Apply transformation if we have stored angles
+    if storedPitch ~= 0 or storedYaw ~= 0 or storedRoll ~= 0 or pitchOffset ~= 0 or yawOffset ~= 0 or rollOffset ~= 0 then
+        result = ApplyPanoCorrection(img, -finalPitch, -finalYaw, -finalRoll, req)
     end
 
     -- Add overlay if requested (shows on current result)
     if showOverlay then
         result = AddOverlay(result, v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x2, v2y2,
-                          applied, 0, 0, 0, req)
+                          false, 0, 0, 0, req)
     end
 
     OutImage:Set(req, result)
