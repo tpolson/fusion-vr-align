@@ -417,81 +417,19 @@ function Process(req)
     OutImage:Set(req, result)
 end
 
--- Apply panoramic correction using transformation
+-- Apply panoramic correction using native GPU PanoMap
 function ApplyPanoCorrection(img, yaw, pitch, roll, req)
-    local width = img.Width
-    local height = img.Height
+    -- Create PanoMap tool instance for GPU-accelerated panoramic transformation
+    local panomap = PanoMap({
+        Input = img,
+        Yaw = yaw,
+        Pitch = pitch,
+        Roll = roll,
+    })
 
-    -- Create output image
-    local out = Image({IMG_Like = img})
-
-    -- Convert angles to radians
-    local yawRad = math.rad(yaw)
-    local pitchRad = math.rad(pitch)
-    local rollRad = math.rad(roll)
-
-    -- Rotation matrices
-    local cosPitch = math.cos(pitchRad)
-    local sinPitch = math.sin(pitchRad)
-    local cosYaw = math.cos(yawRad)
-    local sinYaw = math.sin(yawRad)
-    local cosRoll = math.cos(rollRad)
-    local sinRoll = math.sin(rollRad)
-
-    -- Process each pixel
-    local p = Pixel({A = 0, R = 0, G = 0, B = 0})
-
-    for y = 0, height - 1 do
-        for x = 0, width - 1 do
-            -- Normalize coordinates (0 to 1)
-            local nx = x / width
-            local ny = y / height
-
-            -- Convert to spherical coordinates
-            local lon = (nx - 0.5) * 360.0
-            local lat = (0.5 - ny) * 180.0
-
-            -- Convert to 3D vector
-            local vec = SphericalToVector(lon, lat)
-
-            -- Apply rotation in correct order: Yaw, Pitch, Roll
-            -- Yaw (around Y axis) - applied first
-            local x1 = vec.x * cosYaw + vec.z * sinYaw
-            local y1 = vec.y
-            local z1 = -vec.x * sinYaw + vec.z * cosYaw
-
-            -- Pitch (around X axis) - applied second
-            local x2 = x1
-            local y2 = y1 * cosPitch - z1 * sinPitch
-            local z2 = y1 * sinPitch + z1 * cosPitch
-
-            -- Roll (around Z axis) - applied last
-            local x3 = x2 * cosRoll - y2 * sinRoll
-            local y3 = x2 * sinRoll + y2 * cosRoll
-            local z3 = z2
-
-            -- Convert back to spherical
-            local newLon = math.deg(math.atan2(x3, z3))
-            local newLat = math.deg(math.asin(math.max(-1, math.min(1, y3))))
-
-            -- Convert back to normalized coordinates
-            local srcX = (newLon / 360.0 + 0.5) * width
-            local srcY = (0.5 - newLat / 180.0) * height
-
-            -- Wrap around horizontally
-            srcX = srcX % width
-            if srcX < 0 then srcX = srcX + width end
-
-            -- Clamp vertically
-            srcY = math.max(0, math.min(height - 1, srcY))
-
-            -- Sample source image
-            img:GetPixel(srcX, srcY, p)
-            out:SetPixel(x, y, p)
-        end
-    end
-
-    return out
+    -- Process through PanoMap and return result
+    local result = panomap:GetValue(req)
+    return result
 end
 
 -- Transform a normalized coordinate through the rotation
