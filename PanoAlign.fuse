@@ -74,43 +74,16 @@ function Create()
 
     self:EndControlNest()
 
-    -- Display calculated values
-    self:BeginControlNest("Calculated Values (Auto)", "CalcValues", true, {})
-
-    InCalcPitchDisplay = self:AddInput("Pitch", "CalcPitchDisplay", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
-        INP_MinScale = -90.0,
-        INP_MaxScale = 90.0,
-        IC_Visible = true,
-        INP_Disabled = true,
-    })
-
-    InCalcYawDisplay = self:AddInput("Yaw", "CalcYawDisplay", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
-        INP_MinScale = -180.0,
-        INP_MaxScale = 180.0,
-        IC_Visible = true,
-        INP_Disabled = true,
-    })
-
-    InCalcRollDisplay = self:AddInput("Roll", "CalcRollDisplay", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
-        INP_MinScale = -180.0,
-        INP_MaxScale = 180.0,
-        IC_Visible = true,
-        INP_Disabled = true,
-    })
-
-    self:EndControlNest()
-
     -- Manual adjustment controls
     self:BeginControlNest("Manual Adjustments", "ManualAdjust", true, {})
+
+    InInfoLabel = self:AddInput("Calculated Values", "InfoLabel", {
+        LINKID_DataType = "Text",
+        INPID_InputControl = "LabelControl",
+        INP_External = false,
+        INP_Passive = true,
+        ICD_Width = 1,
+    })
 
     InPitch = self:AddInput("Pitch", "Pitch", {
         LINKID_DataType = "Number",
@@ -195,10 +168,10 @@ function NotifyChanged(inp, param, time)
         -- Get current time
         local t = time or self.Comp.CurrentTime
 
-        -- Get the calculated values from the display controls
-        local calcPitch = InCalcPitchDisplay:GetValue(t).Value
-        local calcYaw = InCalcYawDisplay:GetValue(t).Value
-        local calcRoll = InCalcRollDisplay:GetValue(t).Value
+        -- Get the calculated values from the outputs
+        local calcPitch = OutPitch:GetValue(t)
+        local calcYaw = OutYaw:GetValue(t)
+        local calcRoll = OutRoll:GetValue(t)
 
         -- Apply to manual controls
         InPitch:SetAttrs({INPID_InputControl = "SliderControl"})
@@ -335,10 +308,9 @@ function Process(req)
         v2x1, v2y1, v2x2, v2y2
     )
 
-    -- Update display controls with calculated values
-    InCalcPitchDisplay[req.Time] = calcPitch
-    InCalcYawDisplay[req.Time] = calcYaw
-    InCalcRollDisplay[req.Time] = calcRoll
+    -- Update label with calculated values
+    local labelText = string.format("Pitch: %.2f°  Yaw: %.2f°  Roll: %.2f°", calcPitch, calcYaw, calcRoll)
+    InInfoLabel:SetAttrs({LINKS_Name = labelText})
 
     -- Determine which values to use for correction
     local pitch, yaw, roll
