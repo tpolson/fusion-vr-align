@@ -28,11 +28,17 @@ FuRegisterClass("PanoAlign", CT_Tool, {
 })
 
 function Create()
+    -- Create the internal PanoMap node
+    self.PanoMap = self:AddTool("PanoMap", 1, 0)
+
     -- Input image
     InImage = self:AddInput("Input", "Input", {
         LINKID_DataType = "Image",
         LINK_Main = 1,
     })
+
+    -- Connect input to PanoMap
+    InImage:ConnectTo(self.PanoMap:FindMainInput(1))
 
     -- Vertical Line 1
     self:BeginControlNest("Vertical Line 1", "VertLine1", true, {})
@@ -360,11 +366,14 @@ function Process(req)
     local finalLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", finalYaw, finalPitch, finalRoll)
     InFinalInfoLabel:SetAttrs({LINKS_Name = finalLabelText})
 
-    -- Apply transformation only when values are non-zero
-    -- Yaw is NOT negated to match standard panorama convention
-    if finalYaw ~= 0 or finalPitch ~= 0 or finalRoll ~= 0 then
-        result = ApplyPanoCorrection(img, finalYaw, -finalPitch, -finalRoll, req)
-    end
+    -- Set PanoMap rotation parameters
+    -- Note: Pitch and Roll are negated to match the expected rotation direction
+    self.PanoMap:SetInput("Yaw", finalYaw, req.Time)
+    self.PanoMap:SetInput("Pitch", -finalPitch, req.Time)
+    self.PanoMap:SetInput("Roll", -finalRoll, req.Time)
+
+    -- Get the transformed image from PanoMap
+    result = self.PanoMap:GetOutput():GetValue(req)
 
     -- Add overlay if requested (always draw on current result)
     if showOverlay then
@@ -373,69 +382,6 @@ function Process(req)
     end
 
     OutImage:Set(req, result)
-end
-
--- Apply panoramic correction using internal Transform function
-function ApplyPanoCorrection(img, yaw, pitch, roll, req)
-    -- Use Fusion's internal Transform function with panoramic rotation
-    -- The Transform function handles the spherical mapping internally
-    local out = img:Transform(nil, {
-        XF_YawPitchRoll = true,
-        XF_Yaw = yaw,
-        XF_Pitch = pitch,
-        XF_Roll = roll,
-        XF_EdgeMode = "Wrap",
-    })
-
-    return out
-end
-
--- Transform a normalized coordinate through the rotation
-function TransformPoint(nx, ny, yaw, pitch, roll)
-    -- Convert to spherical coordinates
-    local lon = (nx - 0.5) * 360.0
-    local lat = (0.5 - ny) * 180.0
-
-    -- Convert to 3D vector
-    local vec = SphericalToVector(lon, lat)
-
-    -- Convert angles to radians
-    local yawRad = math.rad(yaw)
-    local pitchRad = math.rad(pitch)
-    local rollRad = math.rad(roll)
-
-    local cosPitch = math.cos(pitchRad)
-    local sinPitch = math.sin(pitchRad)
-    local cosYaw = math.cos(yawRad)
-    local sinYaw = math.sin(yawRad)
-    local cosRoll = math.cos(rollRad)
-    local sinRoll = math.sin(rollRad)
-
-    -- Apply rotation in correct order: Yaw, Pitch, Roll
-    -- Yaw (around Y axis) - applied first
-    local x1 = vec.x * cosYaw + vec.z * sinYaw
-    local y1 = vec.y
-    local z1 = -vec.x * sinYaw + vec.z * cosYaw
-
-    -- Pitch (around X axis) - applied second
-    local x2 = x1
-    local y2 = y1 * cosPitch - z1 * sinPitch
-    local z2 = y1 * sinPitch + z1 * cosPitch
-
-    -- Roll (around Z axis) - applied last
-    local x3 = x2 * cosRoll - y2 * sinRoll
-    local y3 = x2 * sinRoll + y2 * cosRoll
-    local z3 = z2
-
-    -- Convert back to spherical
-    local newLon = math.deg(math.atan2(x3, z3))
-    local newLat = math.deg(math.asin(math.max(-1, math.min(1, y3))))
-
-    -- Convert back to normalized coordinates
-    local newNx = newLon / 360.0 + 0.5
-    local newNy = 0.5 - newLat / 180.0
-
-    return newNx, newNy
 end
 
 -- Add visual overlay showing reference lines
