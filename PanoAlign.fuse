@@ -10,10 +10,12 @@ Usage:
 1. Connect your 360 latlong image
 2. Drag the on-screen points to define two vertical lines
    (choose features that should be vertical in real world)
-3. The tool calculates and applies the correction
+3. The tool automatically calculates and applies the correction
+4. Use Manual Offsets to fine-tune (additive to calculated values)
+5. Use Reset button to clear manual offsets
 
 Author: Created for panoramic image alignment
-Version: 2.0
+Version: 3.0
 ]]--
 
 FuRegisterClass("PanoAlign", CT_Tool, {
@@ -74,10 +76,10 @@ function Create()
 
     self:EndControlNest()
 
-    -- Manual adjustment controls
-    self:BeginControlNest("Manual Adjustments", "ManualAdjust", true, {})
+    -- Calculated values display
+    self:BeginControlNest("Calculated from Lines", "CalcDisplay", true, {})
 
-    InInfoLabel = self:AddInput("Calculated Values", "InfoLabel", {
+    InCalcInfoLabel = self:AddInput("Values", "CalcInfoLabel", {
         LINKID_DataType = "Text",
         INPID_InputControl = "LabelControl",
         INP_External = false,
@@ -85,7 +87,20 @@ function Create()
         ICD_Width = 1,
     })
 
-    InPitch = self:AddInput("Pitch", "Pitch", {
+    self:EndControlNest()
+
+    -- Manual adjustment offsets (additive)
+    self:BeginControlNest("Manual Offsets (Additive)", "ManualOffsets", true, {})
+
+    InPitchOffset = self:AddInput("Pitch Offset", "PitchOffset", {
+        LINKID_DataType = "Number",
+        INPID_InputControl = "SliderControl",
+        INP_Default = 0.0,
+        INP_MinScale = -45.0,
+        INP_MaxScale = 45.0,
+    })
+
+    InYawOffset = self:AddInput("Yaw Offset", "YawOffset", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
         INP_Default = 0.0,
@@ -93,23 +108,23 @@ function Create()
         INP_MaxScale = 90.0,
     })
 
-    InYaw = self:AddInput("Yaw", "Yaw", {
+    InRollOffset = self:AddInput("Roll Offset", "RollOffset", {
         LINKID_DataType = "Number",
         INPID_InputControl = "SliderControl",
         INP_Default = 0.0,
-        INP_MinScale = -180.0,
-        INP_MaxScale = 180.0,
+        INP_MinScale = -45.0,
+        INP_MaxScale = 45.0,
     })
 
-    InRoll = self:AddInput("Roll", "Roll", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "SliderControl",
-        INP_Default = 0.0,
-        INP_MinScale = -180.0,
-        INP_MaxScale = 180.0,
+    InFinalInfoLabel = self:AddInput("Final Values", "FinalInfoLabel", {
+        LINKID_DataType = "Text",
+        INPID_InputControl = "LabelControl",
+        INP_External = false,
+        INP_Passive = true,
+        ICD_Width = 1,
     })
 
-    InApplyCalcButton = self:AddInput("Apply Calculated Values", "ApplyCalcButton", {
+    InResetButton = self:AddInput("Reset Offsets", "ResetButton", {
         LINKID_DataType = "Number",
         INPID_InputControl = "ButtonControl",
         INP_DoNotifyChanged = true,
@@ -120,20 +135,6 @@ function Create()
 
     -- Processing options
     InShowOverlay = self:AddInput("Show Reference Lines", "ShowOverlay", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "CheckboxControl",
-        INP_Default = 1.0,
-        INP_Integer = true,
-    })
-
-    InAutoCalculate = self:AddInput("Auto Calculate", "AutoCalculate", {
-        LINKID_DataType = "Number",
-        INPID_InputControl = "CheckboxControl",
-        INP_Default = 1.0,
-        INP_Integer = true,
-    })
-
-    InApplyCorrection = self:AddInput("Apply Correction", "ApplyCorrection", {
         LINKID_DataType = "Number",
         INPID_InputControl = "CheckboxControl",
         INP_Default = 1.0,
@@ -164,35 +165,14 @@ function Create()
 end
 
 function NotifyChanged(inp, param, time)
-    if inp == InApplyCalcButton then
+    if inp == InResetButton then
         -- Get current time
         local t = time or self.Comp.CurrentTime
 
-        -- Get point coordinates
-        local v1p1 = InVert1Point1:GetValue(t)
-        local v1p2 = InVert1Point2:GetValue(t)
-        local v2p1 = InVert2Point1:GetValue(t)
-        local v2p2 = InVert2Point2:GetValue(t)
-
-        -- Extract X and Y from Point objects
-        local v1x1, v1y1 = v1p1.X, v1p1.Y
-        local v1x2, v1y2 = v1p2.X, v1p2.Y
-        local v2x1, v2y1 = v2p1.X, v2p1.Y
-        local v2x2, v2y2 = v2p2.X, v2p2.Y
-
-        -- Calculate values
-        local calcPitch, calcYaw, calcRoll = CalculateAlignmentFromVerticals(
-            v1x1, v1y1, v1x2, v1y2,
-            v2x1, v2y1, v2x2, v2y2
-        )
-
-        -- Disable Auto Calculate mode so manual values take effect
-        InAutoCalculate[t] = 0
-
-        -- Apply to manual controls
-        InPitch[t] = calcPitch
-        InYaw[t] = calcYaw
-        InRoll[t] = calcRoll
+        -- Reset all offsets to zero
+        InPitchOffset[t] = 0
+        InYawOffset[t] = 0
+        InRollOffset[t] = 0
     end
 end
 
@@ -295,8 +275,6 @@ end
 function Process(req)
     local img = InImage:GetValue(req)
     local showOverlay = InShowOverlay:GetValue(req).Value == 1
-    local autoCalculate = InAutoCalculate:GetValue(req).Value == 1
-    local applyCorrection = InApplyCorrection:GetValue(req).Value == 1
 
     if not img then
         return
@@ -314,39 +292,37 @@ function Process(req)
     local v2x1, v2y1 = v2p1.X, v2p1.Y
     local v2x2, v2y2 = v2p2.X, v2p2.Y
 
-    -- Always calculate values for display
+    -- Always calculate values from reference lines
     local calcPitch, calcYaw, calcRoll = CalculateAlignmentFromVerticals(
         v1x1, v1y1, v1x2, v1y2,
         v2x1, v2y1, v2x2, v2y2
     )
 
-    -- Update label with calculated values
-    local labelText = string.format("Pitch: %.2f°  Yaw: %.2f°  Roll: %.2f°", calcPitch, calcYaw, calcRoll)
-    InInfoLabel:SetAttrs({LINKS_Name = labelText})
+    -- Get manual offset values
+    local pitchOffset = InPitchOffset:GetValue(req).Value
+    local yawOffset = InYawOffset:GetValue(req).Value
+    local rollOffset = InRollOffset:GetValue(req).Value
 
-    -- Determine which values to use for correction
-    local pitch, yaw, roll
-    if autoCalculate then
-        pitch = calcPitch
-        yaw = calcYaw
-        roll = calcRoll
-    else
-        pitch = InPitch:GetValue(req).Value
-        yaw = InYaw:GetValue(req).Value
-        roll = InRoll:GetValue(req).Value
-    end
+    -- Calculate final values (calculated + offsets)
+    local finalPitch = calcPitch + pitchOffset
+    local finalYaw = calcYaw + yawOffset
+    local finalRoll = calcRoll + rollOffset
+
+    -- Update calculated values label
+    local calcLabelText = string.format("Pitch: %.2f°  Yaw: %.2f°  Roll: %.2f°", calcPitch, calcYaw, calcRoll)
+    InCalcInfoLabel:SetAttrs({LINKS_Name = calcLabelText})
+
+    -- Update final values label
+    local finalLabelText = string.format("Pitch: %.2f°  Yaw: %.2f°  Roll: %.2f°", finalPitch, finalYaw, finalRoll)
+    InFinalInfoLabel:SetAttrs({LINKS_Name = finalLabelText})
 
     -- Output calculated values
     OutPitch:Set(req, calcPitch)
     OutYaw:Set(req, calcYaw)
     OutRoll:Set(req, calcRoll)
 
-    local result = img
-
-    -- Apply correction using transformation matrix
-    if applyCorrection then
-        result = ApplyPanoCorrection(img, pitch, yaw, roll, req)
-    end
+    -- Always apply correction using final values
+    local result = ApplyPanoCorrection(img, finalPitch, finalYaw, finalRoll, req)
 
     -- Add overlay if requested
     if showOverlay then
