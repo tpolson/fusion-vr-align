@@ -360,11 +360,13 @@ function Process(req)
     local finalLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", finalYaw, finalPitch, finalRoll)
     InFinalInfoLabel:SetAttrs({LINKS_Name = finalLabelText})
 
-    -- Always apply transformation with final values
+    -- Apply transformation only when values are non-zero
     -- Yaw is NOT negated to match standard panorama convention
-    result = ApplyPanoCorrection(img, finalYaw, -finalPitch, -finalRoll, req)
+    if finalYaw ~= 0 or finalPitch ~= 0 or finalRoll ~= 0 then
+        result = ApplyPanoCorrection(img, finalYaw, -finalPitch, -finalRoll, req)
+    end
 
-    -- Add overlay if requested (always draw on transformed result)
+    -- Add overlay if requested (always draw on current result)
     if showOverlay then
         result = AddOverlay(result, v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x2, v2y2,
                           false, 0, 0, 0, req)
@@ -373,19 +375,94 @@ function Process(req)
     OutImage:Set(req, result)
 end
 
--- Apply panoramic correction using native GPU PanoMap
+-- Apply panoramic correction using pixel-by-pixel transformation
 function ApplyPanoCorrection(img, yaw, pitch, roll, req)
-    -- Create PanoMap tool instance for GPU-accelerated panoramic transformation
-    local panomap = PanoMap({
-        Input = img,
-        Yaw = yaw,
-        Pitch = pitch,
-        Roll = roll,
+    local width = img.Width
+    local height = img.Height
+
+    -- Create output image
+    local out = Image({
+        IMG_Like = img,
+        IMG_Width = width,
+        IMG_Height = height,
     })
 
-    -- Process through PanoMap and return result
-    local result = panomap:GetValue(req)
-    return result
+    -- Convert angles to radians
+    local yawRad = math.rad(yaw)
+    local pitchRad = math.rad(pitch)
+    local rollRad = math.rad(roll)
+
+    -- Precompute trig values
+    local cosPitch = math.cos(pitchRad)
+    local sinPitch = math.sin(pitchRad)
+    local cosYaw = math.cos(yawRad)
+    local sinYaw = math.sin(yawRad)
+    local cosRoll = math.cos(rollRad)
+    local sinRoll = math.sin(rollRad)
+
+    -- Process each pixel
+    local srcPixel = Pixel()
+
+    for y = 0, height - 1 do
+        for x = 0, width - 1 do
+            -- Convert pixel to normalized coordinates [0,1]
+            local nx = x / width
+            local ny = y / height
+
+            -- Convert to spherical coordinates (longitude, latitude in degrees)
+            local lon = (nx - 0.5) * 360.0  -- -180 to 180
+            local lat = (0.5 - ny) * 180.0  -- 90 to -90
+
+            -- Convert to radians
+            local lonRad = math.rad(lon)
+            local latRad = math.rad(lat)
+
+            -- Convert to 3D unit vector
+            local vx = math.cos(latRad) * math.sin(lonRad)
+            local vy = math.sin(latRad)
+            local vz = math.cos(latRad) * math.cos(lonRad)
+
+            -- Apply rotations in order: Yaw, Pitch, Roll
+            -- Yaw (around Y axis)
+            local x1 = vx * cosYaw + vz * sinYaw
+            local y1 = vy
+            local z1 = -vx * sinYaw + vz * cosYaw
+
+            -- Pitch (around X axis)
+            local x2 = x1
+            local y2 = y1 * cosPitch - z1 * sinPitch
+            local z2 = y1 * sinPitch + z1 * cosPitch
+
+            -- Roll (around Z axis)
+            local x3 = x2 * cosRoll - y2 * sinRoll
+            local y3 = x2 * sinRoll + y2 * cosRoll
+            local z3 = z2
+
+            -- Convert back to spherical
+            local newLon = math.deg(math.atan2(x3, z3))
+            local newLat = math.deg(math.asin(math.max(-1, math.min(1, y3))))
+
+            -- Convert back to normalized coordinates
+            local newNx = newLon / 360.0 + 0.5
+            local newNy = 0.5 - newLat / 180.0
+
+            -- Wrap horizontally (longitude wraps around)
+            newNx = newNx - math.floor(newNx)
+
+            -- Clamp vertically (latitude doesn't wrap)
+            newNy = math.max(0, math.min(1, newNy))
+
+            -- Convert to pixel coordinates
+            local srcX = newNx * width
+            local srcY = newNy * height
+
+            -- Sample from source image (bilinear interpolation)
+            img:SamplePixel(srcX, srcY, srcPixel)
+            out:SetPixel(x, y, srcPixel)
+        end
+    end
+
+    return out
 end
 
 -- Transform a normalized coordinate through the rotation
