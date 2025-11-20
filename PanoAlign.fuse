@@ -270,52 +270,11 @@ end
 
 -- Calculate alignment angles from two vertical reference lines
 function CalculateAlignmentFromVerticals(v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x2, v2y2)
-    -- Convert vertical line 1 points to 3D vectors
-    local v1Lon1, v1Lat1 = NormalizedToSpherical(v1x1, v1y1)
-    local v1Lon2, v1Lat2 = NormalizedToSpherical(v1x2, v1y2)
-    local v1Vec1 = SphericalToVector(v1Lon1, v1Lat1)
-    local v1Vec2 = SphericalToVector(v1Lon2, v1Lat2)
-
-    -- Convert vertical line 2 points to 3D vectors
-    local v2Lon1, v2Lat1 = NormalizedToSpherical(v2x1, v2y1)
-    local v2Lon2, v2Lat2 = NormalizedToSpherical(v2x2, v2y2)
-    local v2Vec1 = SphericalToVector(v2Lon1, v2Lat1)
-    local v2Vec2 = SphericalToVector(v2Lon2, v2Lat2)
-
-    -- Calculate the direction vectors of each line
-    local line1Dir = VectorNormalize({
-        x = v1Vec2.x - v1Vec1.x,
-        y = v1Vec2.y - v1Vec1.y,
-        z = v1Vec2.z - v1Vec1.z
-    })
-
-    local line2Dir = VectorNormalize({
-        x = v2Vec2.x - v2Vec1.x,
-        y = v2Vec2.y - v2Vec1.y,
-        z = v2Vec2.z - v2Vec1.z
-    })
-
-    -- Average the two line directions for better stability
-    local avgDir = VectorNormalize({
-        x = (line1Dir.x + line2Dir.x) / 2,
-        y = (line1Dir.y + line2Dir.y) / 2,
-        z = (line1Dir.z + line2Dir.z) / 2
-    })
-
-    -- A perfect vertical line should point in the Y direction (0, 1, 0)
-    -- Calculate the rotation needed to align avgDir with (0, 1, 0)
-
-    -- Calculate pitch (rotation around X axis)
-    -- Pitch is the angle in the YZ plane
-    local pitch = -math.deg(math.atan2(avgDir.z, avgDir.y))
-
-    -- Calculate roll (rotation around Z axis)
-    -- Roll is the angle in the XY plane
-    local roll = math.deg(math.atan2(avgDir.x, avgDir.y))
-
-    -- Yaw (left/right pan) is not determined by vertical lines
-    -- Keep at 0 - user can manually adjust if needed
+    -- SIMPLIFIED: Return zero values for now
+    -- We'll rebuild the calculation step by step
     local yaw = 0
+    local pitch = 0
+    local roll = 0
 
     return yaw, pitch, roll
 end
