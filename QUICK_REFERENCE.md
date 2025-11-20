@@ -2,11 +2,11 @@
 
 ## 🎯 Quick Start
 
-### Fuse Method (Visual, Slower)
+### Fuse Method (Visual, Interactive)
 1. Load panorama in Fusion
 2. Add **Transform > Pano Align** node
-3. Adjust reference points using sliders
-4. ✅ Auto Calculate + Apply Correction
+3. **Drag on-screen crosshairs** to place vertical reference lines
+4. ✅ Auto Calculate + Apply Correction (enabled by default)
 
 ### Script Method (Fast, Manual)
 1. Select your Loader node
@@ -16,63 +16,60 @@
 
 ---
 
-## 📊 Reference Point Coordinates
+## 📊 On-Screen Controls
 
-### Normalized Coordinates (0.0 to 1.0)
-```
-(0.0, 0.0) ───────── (0.5, 0.0) ───────── (1.0, 0.0)
-    │                     │                     │
-    │         TOP/NORTH POLE (±90° lat)         │
-    │                                            │
-(0.0, 0.5) ───────── CENTER ─────────── (1.0, 0.5)
-    │                EQUATOR (0° lat)            │
-    │                                            │
-(0.0, 1.0) ───────── (0.5, 1.0) ───────── (1.0, 1.0)
-            BOTTOM/SOUTH POLE (-90° lat)
-```
+### Draggable Crosshairs
+- **Drag directly in Fusion viewer** to position points
+- No need to manually enter coordinates!
+- Place points by clicking and dragging the crosshair controls
+- Crosshairs snap to features for easy alignment
 
-### Common Reference Points
+### Visual Feedback
+- 🟢 **GREEN line** with 🟡 **YELLOW points** = Vertical Line 1
+- 🔵 **CYAN line** with 🔴 **MAGENTA points** = Vertical Line 2
 
-**Horizon Line (Horizontal)**:
-- Point 1: `(0.1, 0.5)` - Left horizon
-- Point 2: `(0.9, 0.5)` - Right horizon
-
-**Vertical Center (Vertical)**:
-- Point 1: `(0.5, 0.2)` - Top center
-- Point 2: `(0.5, 0.8)` - Bottom center
+### Positioning Tips
+- Place top/bottom points along full height of vertical feature
+- Space the two vertical lines far apart (opposite sides of pano if possible)
+- Use the on-screen overlay to verify line placement
 
 ---
 
-## 🎨 Overlay Colors (Fuse Only)
+## 🎨 Overlay Colors
 
 | Color | Element |
 |-------|---------|
-| 🔴 **RED** | Horizontal reference line |
-| 🟡 **YELLOW** | Horizontal reference points |
-| 🟢 **GREEN** | Vertical reference line |
-| 🔵 **CYAN** | Vertical reference points |
+| 🟢 **GREEN** | Vertical Line 1 |
+| 🟡 **YELLOW** | Vertical Line 1 control points |
+| 🔵 **CYAN** | Vertical Line 2 |
+| 🔴 **MAGENTA** | Vertical Line 2 control points |
 
 ---
 
 ## 🔧 Controls Reference
 
-### Fuse Controls
+### On-Screen Controls (Drag in Viewer)
+
+| Control | Description |
+|---------|-------------|
+| **Vertical Line 1 - Top Point** | Drag to place top of first vertical reference |
+| **Vertical Line 1 - Bottom Point** | Drag to place bottom of first vertical reference |
+| **Vertical Line 2 - Top Point** | Drag to place top of second vertical reference |
+| **Vertical Line 2 - Bottom Point** | Drag to place bottom of second vertical reference |
+
+### Manual Adjustments (Inspector Panel)
 
 | Control | Range | Description |
 |---------|-------|-------------|
-| **Horiz X1/Y1** | 0.0 - 1.0 | First point of horizontal line |
-| **Horiz X2/Y2** | 0.0 - 1.0 | Second point of horizontal line |
-| **Vert X1/Y1** | 0.0 - 1.0 | First point of vertical line |
-| **Vert X2/Y2** | 0.0 - 1.0 | Second point of vertical line |
 | **Pitch** | -90° to +90° | Up/down tilt (manual mode) |
 | **Yaw** | -180° to +180° | Left/right rotation (manual mode) |
 | **Roll** | -180° to +180° | Clockwise/CCW tilt (manual mode) |
 
-### Checkboxes
+### Options
 
-- ☑️ **Show Reference Lines**: Display overlay
-- ☑️ **Auto Calculate**: Calculate from reference lines
-- ☑️ **Apply Correction**: Apply the transformation
+- ✅ **Show Reference Lines**: Display overlay (default: ON)
+- ✅ **Auto Calculate**: Calculate from reference lines (default: ON)
+- ✅ **Apply Correction**: Apply the transformation (default: ON)
 
 ---
 
@@ -113,21 +110,21 @@ Range: -180° to +180°
 
 ---
 
-## ✅ Good Reference Features
+## ✅ Good Vertical Reference Features
 
-### Horizontal References
-- ✅ Ocean/lake horizon
-- ✅ Straight roads
-- ✅ Building rooflines
-- ✅ Table/counter edges
-- ✅ Floor/ceiling lines
-
-### Vertical References
-- ✅ Door frames
-- ✅ Building corners
-- ✅ Straight poles
+### Best Choices
+- ✅ Door frames (full height)
+- ✅ Building corners (sharp edges)
+- ✅ Straight poles or posts
 - ✅ Wall edges
-- ✅ Window frames
+- ✅ Window frames (vertical sides)
+- ✅ Columns or pillars
+- ✅ Straight trees
+
+### Selection Tips
+- Choose features that span significant vertical distance
+- Pick features far apart (opposite sides of panorama)
+- Select clearly visible, unambiguous edges
 
 ---
 
@@ -135,10 +132,11 @@ Range: -180° to +180°
 
 ### Avoid These
 - ❌ Curved surfaces
-- ❌ Sloped terrain
+- ❌ Slanted or leaning objects
 - ❌ Perspective-distorted lines
-- ❌ Very short lines
-- ❌ Objects near top/bottom poles
+- ❌ Very short vertical segments
+- ❌ Objects near top/bottom poles (extreme distortion)
+- ❌ Blurry or unclear edges
 
 ---
 
