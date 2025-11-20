@@ -28,17 +28,11 @@ FuRegisterClass("PanoAlign", CT_Tool, {
 })
 
 function Create()
-    -- Create the internal PanoMap node
-    self.PanoMap = self:AddTool("PanoMap", 1, 0)
-
     -- Input image
     InImage = self:AddInput("Input", "Input", {
         LINKID_DataType = "Image",
         LINK_Main = 1,
     })
-
-    -- Connect input to PanoMap
-    InImage:ConnectTo(self.PanoMap:GetInput("Input"))
 
     -- Vertical Line 1
     self:BeginControlNest("Vertical Line 1", "VertLine1", true, {})
@@ -366,14 +360,8 @@ function Process(req)
     local finalLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", finalYaw, finalPitch, finalRoll)
     InFinalInfoLabel:SetAttrs({LINKS_Name = finalLabelText})
 
-    -- Set PanoMap rotation parameters
-    -- Note: Pitch and Roll are negated to match the expected rotation direction
-    self.PanoMap:SetInput("Yaw", finalYaw, req.Time)
-    self.PanoMap:SetInput("Pitch", -finalPitch, req.Time)
-    self.PanoMap:SetInput("Roll", -finalRoll, req.Time)
-
-    -- Get the transformed image from PanoMap
-    result = self.PanoMap:GetOutput("Output"):GetValue(req)
+    -- Apply the transformation directly
+    result = ApplyPanoramicRotation(img, finalYaw, finalPitch, finalRoll, req)
 
     -- Add overlay if requested (always draw on current result)
     if showOverlay then
@@ -382,6 +370,132 @@ function Process(req)
     end
 
     OutImage:Set(req, result)
+end
+
+-- Apply panoramic rotation to an equirectangular image
+function ApplyPanoramicRotation(img, yaw, pitch, roll, req)
+    local width = img.Width
+    local height = img.Height
+
+    -- Create output image
+    local out = Image({
+        IMG_Like = img,
+        IMG_Width = width,
+        IMG_Height = height,
+    })
+
+    -- Convert angles to radians
+    local yawRad = math.rad(yaw)
+    local pitchRad = math.rad(pitch)
+    local rollRad = math.rad(roll)
+
+    -- Build rotation matrices
+    -- Yaw (rotation around Y axis)
+    local cosY, sinY = math.cos(yawRad), math.sin(yawRad)
+    -- Pitch (rotation around X axis)
+    local cosP, sinP = math.cos(pitchRad), math.sin(pitchRad)
+    -- Roll (rotation around Z axis)
+    local cosR, sinR = math.cos(rollRad), math.sin(rollRad)
+
+    -- Combined rotation matrix (Yaw * Pitch * Roll)
+    local function rotateVector(x, y, z)
+        -- Apply Roll (Z-axis rotation)
+        local x1 = cosR * x - sinR * y
+        local y1 = sinR * x + cosR * y
+        local z1 = z
+
+        -- Apply Pitch (X-axis rotation)
+        local x2 = x1
+        local y2 = cosP * y1 - sinP * z1
+        local z2 = sinP * y1 + cosP * z1
+
+        -- Apply Yaw (Y-axis rotation)
+        local x3 = cosY * x2 + sinY * z2
+        local y3 = y2
+        local z3 = -sinY * x2 + cosY * z2
+
+        return x3, y3, z3
+    end
+
+    local srcPixel = Pixel()
+
+    -- Process each output pixel
+    for y = 0, height - 1 do
+        for x = 0, width - 1 do
+            -- Convert output pixel to normalized coordinates [0, 1]
+            local u = x / width
+            local v = y / height
+
+            -- Convert to spherical coordinates (lon, lat) in degrees
+            local lon = (u - 0.5) * 360.0  -- -180 to 180
+            local lat = (0.5 - v) * 180.0  -- 90 to -90
+
+            -- Convert to radians
+            local lonRad = math.rad(lon)
+            local latRad = math.rad(lat)
+
+            -- Convert to 3D vector
+            local vx = math.cos(latRad) * math.sin(lonRad)
+            local vy = math.sin(latRad)
+            local vz = math.cos(latRad) * math.cos(lonRad)
+
+            -- Apply rotation
+            local rx, ry, rz = rotateVector(vx, vy, vz)
+
+            -- Convert back to spherical coordinates
+            local newLat = math.asin(math.max(-1, math.min(1, ry)))
+            local newLon = math.atan2(rx, rz)
+
+            -- Convert back to normalized coordinates
+            local newU = (math.deg(newLon) / 360.0) + 0.5
+            local newV = 0.5 - (math.deg(newLat) / 180.0)
+
+            -- Wrap around horizontally (longitude wraps at 360 degrees)
+            newU = newU - math.floor(newU)
+
+            -- Clamp vertically (latitude doesn't wrap)
+            newV = math.max(0, math.min(1, newV))
+
+            -- Convert back to pixel coordinates
+            local srcX = newU * width
+            local srcY = newV * height
+
+            -- Sample from input image (bilinear interpolation)
+            local x0 = math.floor(srcX)
+            local y0 = math.floor(srcY)
+            local x1 = math.min(x0 + 1, width - 1)
+            local y1 = math.min(y0 + 1, height - 1)
+
+            local fx = srcX - x0
+            local fy = srcY - y0
+
+            -- Get four surrounding pixels
+            local p00 = Pixel()
+            local p10 = Pixel()
+            local p01 = Pixel()
+            local p11 = Pixel()
+
+            img:GetPixel(x0, y0, p00)
+            img:GetPixel(x1, y0, p10)
+            img:GetPixel(x0, y1, p01)
+            img:GetPixel(x1, y1, p11)
+
+            -- Bilinear interpolation
+            local r = (1-fx) * (1-fy) * p00.R + fx * (1-fy) * p10.R + (1-fx) * fy * p01.R + fx * fy * p11.R
+            local g = (1-fx) * (1-fy) * p00.G + fx * (1-fy) * p10.G + (1-fx) * fy * p01.G + fx * fy * p11.G
+            local b = (1-fx) * (1-fy) * p00.B + fx * (1-fy) * p10.B + (1-fx) * fy * p01.B + fx * fy * p11.B
+            local a = (1-fx) * (1-fy) * p00.A + fx * (1-fy) * p10.A + (1-fx) * fy * p01.A + fx * fy * p11.A
+
+            srcPixel.R = r
+            srcPixel.G = g
+            srcPixel.B = b
+            srcPixel.A = a
+
+            out:SetPixel(x, y, srcPixel)
+        end
+    end
+
+    return out
 end
 
 -- Add visual overlay showing reference lines
