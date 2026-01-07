@@ -270,13 +270,82 @@ end
 
 -- Calculate alignment angles from two vertical reference lines
 function CalculateAlignmentFromVerticals(v1x1, v1y1, v1x2, v1y2, v2x1, v2y1, v2x2, v2y2)
-    -- SIMPLIFIED: Return zero values for now
-    -- We'll rebuild the calculation step by step
-    local yaw = 0
-    local pitch = 0
-    local roll = 0
-
-    return yaw, pitch, roll
+    -- Add error handling
+    local success, result = pcall(function()
+        -- Convert normalized coordinates to spherical
+        local lon1_1, lat1_1 = NormalizedToSpherical(v1x1, v1y1)
+        local lon1_2, lat1_2 = NormalizedToSpherical(v1x2, v1y2)
+        local lon2_1, lat2_1 = NormalizedToSpherical(v2x1, v2y1)
+        local lon2_2, lat2_2 = NormalizedToSpherical(v2x2, v2y2)
+        
+        -- Convert to 3D vectors
+        local v1_top = SphericalToVector(lon1_1, lat1_1)
+        local v1_bottom = SphericalToVector(lon1_2, lat1_2)
+        local v2_top = SphericalToVector(lon2_1, lat2_1)
+        local v2_bottom = SphericalToVector(lon2_2, lat2_2)
+        
+        -- Calculate direction vectors for each vertical line
+        local v1_dir = {
+            x = v1_bottom.x - v1_top.x,
+            y = v1_bottom.y - v1_top.y,
+            z = v1_bottom.z - v1_top.z
+        }
+        local v2_dir = {
+            x = v2_bottom.x - v2_top.x,
+            y = v2_bottom.y - v2_top.y,
+            z = v2_bottom.z - v2_top.z
+        }
+        
+        -- Normalize direction vectors
+        v1_dir = VectorNormalize(v1_dir)
+        v2_dir = VectorNormalize(v2_dir)
+        
+        -- Check if vectors are valid (not zero length)
+        local v1_len = VectorLength(v1_dir)
+        local v2_len = VectorLength(v2_dir)
+        
+        if v1_len < 0.001 or v2_len < 0.001 then
+            error("Vertical lines too short or invalid")
+        end
+        
+        -- Calculate the normal to the plane defined by the two vertical lines
+        -- This represents the "up" direction that should be aligned with vertical
+        local normal = VectorCross(v1_dir, v2_dir)
+        normal = VectorNormalize(normal)
+        
+        -- Check if normal is valid (lines not parallel)
+        local normal_len = VectorLength(normal)
+        if normal_len < 0.001 then
+            error("Vertical lines are parallel or too close together")
+        end
+        
+        -- Calculate pitch from the normal's Y component
+        -- When normal.y = 1, pitch = 0 (perfectly level)
+        -- When normal.y = 0, pitch = ±90° (completely sideways)
+        local pitch = math.deg(math.asin(math.max(-1, math.min(1, -normal.y))))
+        
+        -- Calculate roll from the projection of normal onto XZ plane
+        -- This gives the rotation around the vertical axis
+        local roll = math.deg(math.atan2(normal.x, normal.z))
+        
+        -- Calculate yaw as the average longitude to center the panorama
+        local yaw = -(lon1_1 + lon1_2 + lon2_1 + lon2_2) / 4
+        
+        -- Normalize angles to standard ranges
+        while yaw > 180 do yaw = yaw - 360 end
+        while yaw < -180 do yaw = yaw + 360 end
+        while roll > 180 do roll = roll - 360 end
+        while roll < -180 do roll = roll + 360 end
+        
+        return yaw, pitch, roll
+    end)
+    
+    if success then
+        return result
+    else
+        print("PanoAlign: Calculation error - " .. tostring(result))
+        return 0, 0, 0  -- Return safe default values
+    end
 end
 
 function Process(req)
@@ -288,17 +357,41 @@ function Process(req)
         return
     end
 
-    -- Get point coordinates
+    -- Get point coordinates with error handling
     local v1p1 = InVert1Point1:GetValue(req)
     local v1p2 = InVert1Point2:GetValue(req)
     local v2p1 = InVert2Point1:GetValue(req)
     local v2p2 = InVert2Point2:GetValue(req)
+    
+    -- Validate point coordinates
+    if not v1p1 or not v1p2 or not v2p1 or not v2p2 then
+        print("PanoAlign: Invalid point coordinates")
+        OutImage:Set(req, img)
+        return
+    end
 
     -- Extract X and Y from Point objects
     local v1x1, v1y1 = v1p1.X, v1p1.Y
     local v1x2, v1y2 = v1p2.X, v1p2.Y
     local v2x1, v2y1 = v2p1.X, v2p1.Y
     local v2x2, v2y2 = v2p2.X, v2p2.Y
+    
+    -- Validate coordinate ranges
+    local function validateCoord(x, y, name)
+        if x < 0 or x > 1 or y < 0 or y > 1 then
+            print(string.format("PanoAlign: %s coordinates out of range: (%.3f, %.3f)", name, x, y))
+            return false
+        end
+        return true
+    end
+    
+    if not (validateCoord(v1x1, v1y1, "Vert1Point1") and
+            validateCoord(v1x2, v1y2, "Vert1Point2") and
+            validateCoord(v2x1, v2y1, "Vert2Point1") and
+            validateCoord(v2x2, v2y2, "Vert2Point2")) then
+        OutImage:Set(req, img)
+        return
+    end
 
     local result = img
 
@@ -321,7 +414,7 @@ function Process(req)
 
         -- Update calculated values label (order: Yaw, Pitch, Roll)
         local calcLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", calcYaw, calcPitch, calcRoll)
-        InCalcInfoLabel:SetAttrs({LINKS_Name = calcLabelText})
+        InCalcInfoLabel:SetAttrs({INP_Text = calcLabelText})
 
         -- Output calculated values
         OutYaw:Set(req, calcYaw)
@@ -338,7 +431,7 @@ function Process(req)
 
         -- Update label to show current stored values (order: Yaw, Pitch, Roll)
         local calcLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", calcYaw, calcPitch, calcRoll)
-        InCalcInfoLabel:SetAttrs({LINKS_Name = calcLabelText})
+        InCalcInfoLabel:SetAttrs({INP_Text = calcLabelText})
 
         -- Output stored values
         OutYaw:Set(req, calcYaw)
@@ -358,7 +451,7 @@ function Process(req)
 
     -- Update final values label (order: Yaw, Pitch, Roll)
     local finalLabelText = string.format("Yaw: %.2f°  Pitch: %.2f°  Roll: %.2f°", finalYaw, finalPitch, finalRoll)
-    InFinalInfoLabel:SetAttrs({LINKS_Name = finalLabelText})
+    InFinalInfoLabel:SetAttrs({INP_Text = finalLabelText})
 
     -- Apply the transformation directly
     result = ApplyPanoramicRotation(img, finalYaw, finalPitch, finalRoll, req)
@@ -376,6 +469,13 @@ end
 function ApplyPanoramicRotation(img, yaw, pitch, roll, req)
     local width = img.Width
     local height = img.Height
+
+    -- Performance optimization: warn about large images
+    local totalPixels = width * height
+    if totalPixels > 4000000 then  -- 4MP threshold
+        print(string.format("PanoAlign: Processing large image (%dx%d, %.1fMP) - may be slow", 
+                         width, height, totalPixels / 1000000))
+    end
 
     -- Create output image
     local out = Image({
@@ -460,7 +560,7 @@ function ApplyPanoramicRotation(img, yaw, pitch, roll, req)
             local srcX = newU * width
             local srcY = newV * height
 
-            -- Sample from input image (bilinear interpolation)
+            -- Sample from input image (optimized bilinear interpolation)
             local x0 = math.floor(srcX)
             local y0 = math.floor(srcY)
             local x1 = math.min(x0 + 1, width - 1)
@@ -469,27 +569,25 @@ function ApplyPanoramicRotation(img, yaw, pitch, roll, req)
             local fx = srcX - x0
             local fy = srcY - y0
 
-            -- Get four surrounding pixels
-            local p00 = Pixel()
-            local p10 = Pixel()
-            local p01 = Pixel()
-            local p11 = Pixel()
-
+            -- Get four surrounding pixels (optimized to reduce function calls)
+            local p00, p10, p01, p11 = Pixel(), Pixel(), Pixel(), Pixel()
             img:GetPixel(x0, y0, p00)
             img:GetPixel(x1, y0, p10)
             img:GetPixel(x0, y1, p01)
             img:GetPixel(x1, y1, p11)
 
-            -- Bilinear interpolation
-            local r = (1-fx) * (1-fy) * p00.R + fx * (1-fy) * p10.R + (1-fx) * fy * p01.R + fx * fy * p11.R
-            local g = (1-fx) * (1-fy) * p00.G + fx * (1-fy) * p10.G + (1-fx) * fy * p01.G + fx * fy * p11.G
-            local b = (1-fx) * (1-fy) * p00.B + fx * (1-fy) * p10.B + (1-fx) * fy * p01.B + fx * fy * p11.B
-            local a = (1-fx) * (1-fy) * p00.A + fx * (1-fy) * p10.A + (1-fx) * fy * p01.A + fx * fy * p11.A
+            -- Optimized bilinear interpolation (precompute common factors)
+            local fx1 = 1 - fx
+            local fy1 = 1 - fy
+            local fx_fy = fx * fy
+            local fx1_fy = fx1 * fy
+            local fx_fy1 = fx * fy1
+            local fx1_fy1 = fx1 * fy1
 
-            srcPixel.R = r
-            srcPixel.G = g
-            srcPixel.B = b
-            srcPixel.A = a
+            srcPixel.R = fx1_fy1 * p00.R + fx_fy1 * p10.R + fx1_fy * p01.R + fx_fy * p11.R
+            srcPixel.G = fx1_fy1 * p00.G + fx_fy1 * p10.G + fx1_fy * p01.G + fx_fy * p11.G
+            srcPixel.B = fx1_fy1 * p00.B + fx_fy1 * p10.B + fx1_fy * p01.B + fx_fy * p11.B
+            srcPixel.A = fx1_fy1 * p00.A + fx_fy1 * p10.A + fx1_fy * p01.A + fx_fy * p11.A
 
             out:SetPixel(x, y, srcPixel)
         end
